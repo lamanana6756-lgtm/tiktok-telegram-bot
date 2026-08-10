@@ -28,46 +28,95 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def create_media_keyboard(url: str):
-    """Create inline keyboard buttons below media posts."""
+    """Create a sleek multi-row inline keyboard layout."""
     keyboard = [
         [
-            InlineKeyboardButton("🔗 លីងដើម (Original Link)", url=url),
-            InlineKeyboardButton("📢 ចែករំលែក (Share Bot)", url=f"https://t.me/share/url?url=https://t.me/ratanaban_bot&text=%E1%9E%9F%E1%9FA%9F%E1%9E%8F%E1%9E%D2%E1%9E%9F%E1%9E%9Hand%20TikTok%20Downloader%20Bot!"),
+            InlineKeyboardButton("🔗 ទៅកាន់ TikTok ដើម (Original)", url=url),
+            InlineKeyboardButton("📢 ចែករំលែក Bot (Share)", url=f"https://t.me/share/url?url=https://t.me/ratanaban_bot&text=%E1%9E%9F%E1%9FA%9F%E1%9E%8F%E1%9E%D2%E1%9E%9F%E1%9E%9Hand%20TikTok%20Downloader%20Bot!"),
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start command in Khmer."""
+    """Handle /start command with professional card UI."""
     welcome_text = (
-        "👋 **សូមស្វាគមន៍មកកាន់ TikTok Downloader Bot!**\n\n"
-        "ខ្ញុំអាចជួយអ្នកទាញយក៖\n"
-        "🎬 **វីដេអូ TikTok គ្មាន Watermark (អត់ជាប់ឡូហ្គោ)**\n"
-        "🖼️ **រូបភាព Slide / Photo Posts**\n"
-        "🎵 **បទចម្រៀង / សំឡេង Background**\n\n"
-        "✨ **របៀបប្រកាត់ប្រើប្រាស់៖**\n"
-        "1. ចម្លង (Copy) លីងវីដេអូ ឬរូបភាព TikTok\n"
-        "2. ផ្ញើ (Paste & Send) លីងនោះមកកាន់ Bot នេះ\n"
-        "3. រង់ចាំបន្តិច Bot នឹងផ្ញើជូនអ្នកភ្លាមៗ! 🚀\n\n"
-        "ផ្ញើ `/help` ដើម្បីមើលការណែនាំបន្ថែម។"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "✨ **TIKTOK DOWNLOADER BOT v2.0** ✨\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🟢 **ប្រព័ន្ធដំណើការ៖** 24/7 Online Cloud\n\n"
+        "👋 **សូមស្វាគមន៍មកកាន់ប្រព័ន្ធទាញយក TikTok!**\n\n"
+        "**លក្ខណៈពិសេស៖**\n"
+        " 🎬 **HD Video** — ទាញយកគ្មាន Watermark\n"
+        " 🖼️ **Photo Slides** — ទាញយករូបភាពជាអាល់ប៊ុម\n"
+        " 🎵 **MP3 Audio** — រក្សាទុកបទចម្រៀង Original\n\n"
+        "📌 **របៀបប្រើប្រាស់៖**\n"
+        "1️⃣ ចម្លង (Copy) លីងពី TikTok\n"
+        "2️⃣ ផ្ញើ (Paste & Send) លីងចូលក្នុង Chat នេះ\n"
+        "3️⃣ រង់ចាំបន្តិច Bot នឹងទាញយកជូនភ្លាមៗ! 🚀\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "💬 ផ្ញើ `/help` សម្រាប់ជំនួយ | `/about` ព័ត៌មាន Bot"
     )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📖 ការណែនាំ (Help)", callback_data="help_info"),
+            InlineKeyboardButton("📢 ចែករំលែក (Share)", url="https://t.me/share/url?url=https://t.me/ratanaban_bot"),
+        ]
+    ]
+    await update.message.reply_text(
+        welcome_text,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /help command in Khmer."""
+    """Handle /help command with styled guidance card."""
     help_text = (
-        "📖 **ការណែនាំអំពីការប្រើប្រាស់**\n\n"
-        "• **ទម្រង់លីងដែលគាំទ្រ៖**\n"
-        "  - `https://www.tiktok.com/@user/video/123456789`\n"
-        "  - `https://vt.tiktok.com/xxxxxx/`\n"
-        "  - `https://vm.tiktok.com/xxxxxx/`\n\n"
-        "• **លក្ខណៈពិសេស៖**\n"
-        "  - 🎬 ទាញយកវីដេអូ HD គ្មាន Watermark\n"
-        "  - 🖼️ ទាញយករូបភាព Slide ទាំងអស់ជាអាល់ប៊ុម\n"
-        "  - 🎵 រក្សាទុកបទចម្រៀង Background\n\n"
-        "ប្រសិនបើមានបញ្ហា សូមប្រាកដថាវីដេអូនោះជា Public!"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "📖 **ការណែនាំ & លីងដែលគាំទ្រ**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🔗 **ទម្រង់ Link ដែលអាចប្រើបាន៖**\n"
+        " ▫️ `https://www.tiktok.com/@user/video/...`\n"
+        " ▫️ `https://vt.tiktok.com/xxxxxx/`\n"
+        " ▫️ `https://vm.tiktok.com/xxxxxx/`\n"
+        " ▫️ TikTok Photo Slideshow posts\n\n"
+        "⚡ **ល្បឿនទាញយក៖** 1-3 វិនាទី (High Speed)\n"
+        "🛡️ **សុវត្ថិភាព៖** គ្មាន விளம்பர / គ្មាន Ads\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "ផ្ញើលីង TikTok របស់អ្នកមកទីនេះដើម្បីចាប់ផ្តើម!"
     )
     await update.message.reply_text(help_text, parse_mode="Markdown")
+
+async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /about command."""
+    about_text = (
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "ℹ️ **អំពី TIKTOK DOWNLOADER BOT**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🤖 **Bot Name:** @ratanaban_bot\n"
+        "⚡ **Engine:** Python Async v2.0\n"
+        "🌐 **Server:** 24/7 Cloud Engine\n"
+        "🛡️ **Status:** Operational 100%\n\n"
+        "❤️ **អរគុណសម្រាប់ការប្រើប្រាស់!**"
+    )
+    await update.message.reply_text(about_text, parse_mode="Markdown")
+
+async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle button callback queries."""
+    query = update.callback_query
+    await query.answer()
+    if query.data == "help_info":
+        await help_command(update, context)
+
+async def post_init(application: Application):
+    """Set native Telegram bot command menu."""
+    from telegram import BotCommand
+    commands = [
+        BotCommand("start", "🚀 ចាប់ផ្តើមប្រើប្រាស់ (Start)"),
+        BotCommand("help", "📖 ការណែនាំអំពីការប្រើប្រាស់ (Help)"),
+        BotCommand("about", "ℹ️ ព័ត៌មានអំពី Bot (About)"),
+    ]
+    await application.bot.set_my_commands(commands)
 
 async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Process user messages containing TikTok links."""
@@ -230,11 +279,13 @@ def main():
         read_timeout=120.0,
         write_timeout=120.0,
     )
-    app = Application.builder().token(BOT_TOKEN).request(request).build()
+    app = Application.builder().token(BOT_TOKEN).request(request).post_init(post_init).build()
 
     # Handlers
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("about", about_command))
+    app.add_handler(CallbackQueryHandler(callback_query_handler))
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND & filters.Regex(r'https?://'),
