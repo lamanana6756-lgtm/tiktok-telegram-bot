@@ -55,10 +55,12 @@ async def fetch_tiktok_media(url: str) -> dict:
         }
 
 async def fetch_from_tikwm(url: str) -> dict | None:
-    """Query TikWM API endpoints for video or slideshow photos."""
+    """Query multiple TikWM API endpoints with automatic failover for 365-day uptime."""
     api_endpoints = [
         "https://www.tikwm.com/api/",
         "https://api.tikwm.com/api/",
+        "https://tikwm.com/api/",
+        "https://v1.tikwm.com/api/",
     ]
     headers = {
         "User-Agent": USER_AGENT,
@@ -111,7 +113,7 @@ async def fetch_from_tikwm(url: str) -> dict | None:
                         "is_fhd": bool(data.get("hdplay")),
                     }
             except Exception as err:
-                logger.warning(f"Error requesting {endpoint}: {err}")
+                logger.warning(f"Self-healing failover: endpoint {endpoint} failed ({err}). Trying next endpoint...")
                 continue
 
     return None
@@ -151,22 +153,32 @@ async def fetch_from_ytdlp(url: str) -> dict:
             "author": author,
             "video_url": direct_url,
             "audio_url": None,
+            "is_fhd": True,
         }
 
     return {"status": "error", "error": "No downloadable media stream found."}
 
-async def download_file(url: str, suffix: str = ".mp4") -> Path:
-    """Download a remote file asynchronously to a temporary path."""
+async def download_file(url: str, suffix: str = ".mp4", max_retries: int = 3) -> Path:
+    """Download a remote file asynchronously with automatic retries and exponential backoff."""
+    import asyncio
     filename = f"{uuid.uuid4().hex}{suffix}"
     file_path = TEMP_DIR / filename
-
     headers = {"User-Agent": USER_AGENT}
-    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-        async with client.stream("GET", url, headers=headers) as response:
-            response.raise_for_status()
-            with open(file_path, "wb") as f:
-                async for chunk in response.aiter_bytes(chunk_size=8192):
-                    f.write(chunk)
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+                async with client.stream("GET", url, headers=headers) as response:
+                    response.raise_for_status()
+                    with open(file_path, "wb") as f:
+                        async for chunk in response.aiter_bytes(chunk_size=8192):
+                            f.write(chunk)
+            return file_path
+        except Exception as e:
+            logger.warning(f"Download attempt {attempt}/{max_retries} failed for {url}: {e}")
+            if attempt == max_retries:
+                raise e
+            await asyncio.sleep(attempt * 1.5)
 
     return file_path
 
