@@ -2,12 +2,13 @@ import os
 import sys
 import logging
 from pathlib import Path
-from telegram import Update, InputMediaPhoto
+from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.request import HTTPXRequest
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     ContextTypes,
     filters,
 )
@@ -25,6 +26,16 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+def create_media_keyboard(url: str):
+    """Create inline keyboard buttons below media posts."""
+    keyboard = [
+        [
+            InlineKeyboardButton("🔗 លីងដើម (Original Link)", url=url),
+            InlineKeyboardButton("📢 ចែករំលែក (Share Bot)", url=f"https://t.me/share/url?url=https://t.me/ratanaban_bot&text=%E1%9E%9F%E1%9FA%9F%E1%9E%8F%E1%9E%D2%E1%9E%9F%E1%9E%9Hand%20TikTok%20Downloader%20Bot!"),
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command in Khmer."""
@@ -110,6 +121,7 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     video=video_file,
                     caption=caption,
                     supports_streaming=True,
+                    reply_markup=create_media_keyboard(url),
                 )
             await status_msg.delete()
 
