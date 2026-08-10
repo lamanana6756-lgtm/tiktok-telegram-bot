@@ -182,6 +182,26 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Clean up temporary files from disk
         cleanup_files(temp_files)
 
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+    def log_message(self, format, *args):
+        pass
+
+def start_health_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logger.info(f"Health check web server running on port {port}")
+
 def main():
     """Start the bot."""
     if not BOT_TOKEN or BOT_TOKEN == "your_telegram_bot_token_here":
@@ -194,6 +214,9 @@ def main():
 
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
+
+    # Start HTTP server on PORT for Render Web Service health checks
+    start_health_server()
 
     print("[*] Starting TikTok Downloader Telegram Bot...")
     
