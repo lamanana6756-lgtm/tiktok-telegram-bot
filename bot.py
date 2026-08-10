@@ -27,14 +27,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def create_media_keyboard(url: str):
-    """Create a sleek multi-row inline keyboard layout."""
-    keyboard = [
-        [
-            InlineKeyboardButton("🔗 ទៅកាន់ TikTok ដើម (Original)", url=url),
-            InlineKeyboardButton("📢 ចែករំលែក Bot (Share)", url=f"https://t.me/share/url?url=https://t.me/ratanaban_bot&text=%E1%9E%9F%E1%9FA%9F%E1%9E%8F%E1%9E%D2%E1%9E%9F%E1%9E%9Hand%20TikTok%20Downloader%20Bot!"),
-        ]
-    ]
+AUDIO_CACHE = {}
+
+def create_media_keyboard(url: str, media_info: dict = None):
+    """Create a sleek multi-row inline keyboard layout with MP3 button."""
+    keyboard = []
+    
+    if media_info:
+        audio_url = media_info.get("audio_url")
+        if audio_url:
+            import uuid
+            short_id = uuid.uuid4().hex[:10]
+            AUDIO_CACHE[short_id] = {
+                "audio_url": audio_url,
+                "title": media_info.get("title", ""),
+                "author": media_info.get("author", ""),
+            }
+            keyboard.append([
+                InlineKeyboardButton("🎵 ទាញយក MP3 (Audio Only)", callback_data=f"dlmp3:{short_id}")
+            ])
+
+    keyboard.append([
+        InlineKeyboardButton("🔗 ទៅកាន់ TikTok ដើម (Original)", url=url),
+        InlineKeyboardButton("📢 ចែករំលែក Bot (Share)", url=f"https://t.me/share/url?url=https://t.me/ratanaban_bot&text=%E1%9E%9F%E1%9FA%9F%E1%9E%8F%E1%9E%D2%E1%9E%9F%E1%9E%9Hand%20TikTok%20Downloader%20Bot!"),
+    ])
     return InlineKeyboardMarkup(keyboard)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -104,9 +120,43 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle button callback queries."""
     query = update.callback_query
-    await query.answer()
-    if query.data == "help_info":
+    data = query.data or ""
+    
+    if data == "help_info":
+        await query.answer()
         await help_command(update, context)
+        return
+
+    if data.startswith("dlmp3:"):
+        short_id = data.split(":", 1)[1]
+        cache_item = AUDIO_CACHE.get(short_id)
+        if not cache_item:
+            await query.answer("❌ សំឡេងនេះផុតកំណត់ហើយ។ សូមផ្ញើលីងម្តងទៀត។", show_alert=True)
+            return
+
+        await query.answer("🎵 កំពុងរៀបចំទាញយក MP3...")
+        status_msg = await query.message.reply_text("⏬ *កំពុងទាញយកបទចម្រៀង MP3...*", parse_mode="Markdown")
+        temp_files = []
+        try:
+            audio_url = cache_item["audio_url"]
+            title = cache_item.get("title", "")
+            author = cache_item.get("author", "")
+            audio_path = await download_file(audio_url, suffix=".mp3")
+            temp_files.append(audio_path)
+            
+            with open(audio_path, "rb") as af:
+                await query.message.reply_audio(
+                    audio=af,
+                    title=f"{title[:40]} (Audio)" if title else "TikTok Audio",
+                    performer=author or "TikTok",
+                    caption=f"🎵 **បទចម្រៀងពី TikTok**\n👤 @{author}" if author else "🎵 **បទចម្រៀងពី TikTok**"
+                )
+            await status_msg.delete()
+        except Exception as e:
+            logger.error(f"Error serving MP3 callback: {e}")
+            await status_msg.edit_text("❌ មិនអាចទាញយកបទចម្រៀងបានទេ។")
+        finally:
+            cleanup_files(temp_files)
 
 async def post_init(application: Application):
     """Set native Telegram bot command menu."""
@@ -162,7 +212,7 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     video=video_file,
                     caption=caption,
                     supports_streaming=True,
-                    reply_markup=create_media_keyboard(url),
+                    reply_markup=create_media_keyboard(url, media_info),
                 )
             await status_msg.delete()
 
