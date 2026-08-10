@@ -1,0 +1,17 @@
+# Environment variables (secret token)
+.env
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary downloads
+temp/
+*.mp4
+*.jpg
+*.mp3
+
+# Log files
+*.log
+firebase-debug.log
