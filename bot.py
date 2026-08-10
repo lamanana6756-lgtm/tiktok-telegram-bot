@@ -3,6 +3,7 @@ import sys
 import logging
 from pathlib import Path
 from telegram import Update, InputMediaPhoto
+from telegram.request import HTTPXRequest
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -191,8 +192,18 @@ def main():
         print("=" * 60 + "\n")
         sys.exit(1)
 
-    print("🚀 Starting TikTok Downloader Telegram Bot...")
-    app = Application.builder().token(BOT_TOKEN).build()
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8")
+
+    print("[*] Starting TikTok Downloader Telegram Bot...")
+    
+    # Custom request timeout for uploading larger video files
+    request = HTTPXRequest(
+        connect_timeout=60.0,
+        read_timeout=120.0,
+        write_timeout=120.0,
+    )
+    app = Application.builder().token(BOT_TOKEN).request(request).build()
 
     # Handlers
     app.add_handler(CommandHandler("start", start_command))
@@ -204,7 +215,7 @@ def main():
         )
     )
 
-    print("✅ Bot is running! Press Ctrl+C to stop.")
+    print("[+] Bot is running! Press Ctrl+C to stop.")
     app.run_polling()
 
 if __name__ == "__main__":
