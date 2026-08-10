@@ -189,7 +189,9 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return
 
         author = media_info.get("author", "")
-        caption = f"👤 @{author}  •  🤖 @ratanaban_bot" if author else "🤖 @ratanaban_bot"
+        is_fhd = media_info.get("is_fhd", True)
+        quality_tag = "🎬 Full HD 1080p" if is_fhd else "🎬 HD"
+        caption = f"👤 @{author}  •  {quality_tag}  •  🤖 @ratanaban_bot" if author else f"{quality_tag}  •  🤖 @ratanaban_bot"
 
         media_type = media_info.get("type")
 
@@ -202,7 +204,7 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 await status_msg.edit_text("❌ មិនអាចស្វែងរកវីដេអូបានទេ។")
                 return
 
-            await status_msg.edit_text("⏬ *កំពុងទាញយកវីដេអូ (គ្មាន Watermark)...*", parse_mode="Markdown")
+            await status_msg.edit_text("⏬ *កំពុងទាញយកវីដេអូ FHD 1080p (គ្មាន Watermark)...*", parse_mode="Markdown")
             video_path = await download_file(video_url, suffix=".mp4")
             temp_files.append(video_path)
 

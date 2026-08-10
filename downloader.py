@@ -96,7 +96,7 @@ async def fetch_from_tikwm(url: str) -> dict | None:
                         "audio_url": data.get("music"),
                     }
 
-                # Otherwise it's a video
+                # Otherwise it's a video (Full HD hdplay prioritized)
                 video_url = data.get("hdplay") or data.get("play") or data.get("wmplay")
                 if video_url:
                     if video_url.startswith("//"):
@@ -108,6 +108,7 @@ async def fetch_from_tikwm(url: str) -> dict | None:
                         "author": author,
                         "video_url": video_url,
                         "audio_url": data.get("music"),
+                        "is_fhd": bool(data.get("hdplay")),
                     }
             except Exception as err:
                 logger.warning(f"Error requesting {endpoint}: {err}")
