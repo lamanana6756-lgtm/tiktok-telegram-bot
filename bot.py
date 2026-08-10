@@ -217,6 +217,11 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     reply_markup=create_media_keyboard(url, media_info),
                 )
             await status_msg.delete()
+            await update.message.reply_text(
+                "✅ **ទាញយកបានជោគជ័យ!**\n\n"
+                "🔗 សូមផ្ញើ (Paste & Send) លីង TikTok ថ្មីមួយទៀតដើម្បីទាញយកបន្ត! 🚀",
+                parse_mode="Markdown"
+            )
 
         # -----------------------------------------------------------
         # PHOTO / SLIDESHOW POST
@@ -274,6 +279,11 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     logger.warning(f"Failed to send audio track: {audio_err}")
 
             await status_msg.delete()
+            await update.message.reply_text(
+                "✅ **ទាញយកបានជោគជ័យ!**\n\n"
+                "🔗 សូមផ្ញើ (Paste & Send) លីង TikTok ថ្មីមួយទៀតដើម្បីទាញយកបន្ត! 🚀",
+                parse_mode="Markdown"
+            )
 
         else:
             await status_msg.edit_text("❌ ទម្រង់ប្រព័ន្ធផ្សព្វផ្សាយមិនស្គាល់។")
