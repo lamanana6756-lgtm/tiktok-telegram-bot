@@ -257,10 +257,10 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
                 await update.message.reply_media_group(media=media_group)
 
-            # If background audio is present, download & send audio
+            # Send audio if present and update status_msg with interactive action buttons
             if audio_url:
                 try:
-                    await status_msg.edit_text("🎵 *កំពុងផ្ញើបទចម្រៀង...*", parse_mode="Markdown")
+                    await status_msg.edit_text("🎵 *កំពុងផ្ញើបទចម្រៀង MP3...*", parse_mode="Markdown")
                     audio_path = await download_file(audio_url, suffix=".mp3")
                     temp_files.append(audio_path)
                     with open(audio_path, "rb") as audio_file:
@@ -268,6 +268,7 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                             audio=audio_file,
                             title=f"{title[:40]} (Audio)" if title else "TikTok Audio",
                             performer=author or "TikTok",
+                            reply_markup=create_media_keyboard(url, media_info),
                         )
                 except Exception as audio_err:
                     logger.warning(f"Failed to send audio track: {audio_err}")
