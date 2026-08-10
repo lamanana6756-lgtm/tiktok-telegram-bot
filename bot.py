@@ -89,16 +89,8 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await status_msg.edit_text(f"❌ {error_text}")
             return
 
-        title = media_info.get("title", "")
         author = media_info.get("author", "")
-        caption_lines = []
-        if title:
-            caption_lines.append(f"📌 {title}")
-        if author:
-            caption_lines.append(f"👤 @{author}")
-        caption = "\n".join(caption_lines)
-        if len(caption) > 1000:
-            caption = caption[:997] + "..."
+        caption = f"👤 @{author}  •  🤖 @ratanaban_bot" if author else "🤖 @ratanaban_bot"
 
         media_type = media_info.get("type")
 

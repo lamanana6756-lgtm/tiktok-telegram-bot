@@ -86,11 +86,8 @@ async def process_telegram_update(update: dict):
                 })
             return
 
-        title = media_info.get("title", "")
         author = media_info.get("author", "")
-        caption = f"📌 {title}\n👤 @{author}" if author else f"📌 {title}"
-        if len(caption) > 1000:
-            caption = caption[:997] + "..."
+        caption = f"👤 @{author}  •  🤖 @ratanaban_bot" if author else "🤖 @ratanaban_bot"
 
         media_type = media_info.get("type")
 
