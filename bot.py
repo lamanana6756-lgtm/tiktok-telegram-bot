@@ -29,6 +29,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 AUDIO_CACHE = {}
+LAST_KEYBOARD_MSG = {}
+
+async def clear_previous_keyboard(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    """Remove inline keyboard from the previous message in this chat to keep feed clean."""
+    prev_msg_id = LAST_KEYBOARD_MSG.get(chat_id)
+    if prev_msg_id:
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=chat_id,
+                message_id=prev_msg_id,
+                reply_markup=None
+            )
+        except Exception as e:
+            logger.debug(f"Could not clear previous keyboard for chat {chat_id}: {e}")
 
 def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = None, file_size_mb: float = None):
     """Create a sleek multi-row inline keyboard layout with MP3 button and optional direct download."""
@@ -155,7 +169,7 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
                     audio=af,
                     title=f"{title[:40]} (Audio)" if title else "TikTok Audio",
                     performer=author or "TikTok",
-                    caption=f"🎵 **បទចម្រៀងពី TikTok**\n👤 @{author}" if author else "🎵 **បទចម្រៀងពី TikTok**"
+                    caption=None
                 )
             await status_msg.delete()
         except Exception as e:
@@ -194,11 +208,9 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await status_msg.edit_text(f"❌ {error_text}")
             return
 
+        chat_id = update.effective_chat.id
+        title = media_info.get("title", "")
         author = media_info.get("author", "")
-        is_fhd = media_info.get("is_fhd", True)
-        quality_tag = "🎬 Full HD 1080p" if is_fhd else "🎬 HD"
-        caption = f"👤 @{author}  •  {quality_tag}  •  🤖 @ratanaban_bot" if author else f"{quality_tag}  •  🤖 @ratanaban_bot"
-
         media_type = media_info.get("type")
 
         # -----------------------------------------------------------
@@ -222,6 +234,7 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 logger.info(f"Video size ({file_size_mb:.1f} MB) > 50MB limit. Providing instant direct download button.")
                 large_file_keyboard = create_media_keyboard(url, media_info, direct_url=video_url, file_size_mb=file_size_mb)
                 
+                await clear_previous_keyboard(context, chat_id)
                 await status_msg.edit_text(
                     f"⚠️ **វីដេអូមានទំហំធំ ({file_size_mb:.1f} MB)**\n\n"
                     f"Telegram មិនអនុញ្ញាតឱ្យ Bot ផ្ញើឯកសារធំជាង **50 MB** ដោយផ្ទាល់ក្នុង Chat ទេ។\n\n"
@@ -229,16 +242,21 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     parse_mode="Markdown",
                     reply_markup=large_file_keyboard
                 )
+                LAST_KEYBOARD_MSG[chat_id] = status_msg.message_id
                 return
 
             await status_msg.edit_text("📤 *កំពុងផ្ញើវីដេអូជូន...*", parse_mode="Markdown")
+            await clear_previous_keyboard(context, chat_id)
             with open(video_path, "rb") as video_file:
-                await update.message.reply_video(
+                video_msg = await update.message.reply_video(
                     video=video_file,
-                    caption=caption,
+                    caption=None,
                     supports_streaming=True,
                     reply_markup=create_media_keyboard(url, media_info),
                 )
+                if video_msg:
+                    LAST_KEYBOARD_MSG[chat_id] = video_msg.message_id
+
             await status_msg.delete()
             await update.message.reply_text(
                 "✅ **ទាញយកបានជោគជ័យ!**\n\n"
@@ -277,10 +295,9 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 media_group = []
 
                 for idx, img_path in enumerate(chunk):
-                    item_caption = caption if (i == 0 and idx == 0) else None
                     with open(img_path, "rb") as f:
                         media_group.append(
-                            InputMediaPhoto(media=f.read(), caption=item_caption)
+                            InputMediaPhoto(media=f.read(), caption=None)
                         )
 
                 await update.message.reply_media_group(media=media_group)
@@ -291,13 +308,17 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     await status_msg.edit_text("🎵 *កំពុងផ្ញើបទចម្រៀង MP3...*", parse_mode="Markdown")
                     audio_path = await download_file(audio_url, suffix=".mp3")
                     temp_files.append(audio_path)
+                    await clear_previous_keyboard(context, chat_id)
                     with open(audio_path, "rb") as audio_file:
-                        await update.message.reply_audio(
+                        audio_msg = await update.message.reply_audio(
                             audio=audio_file,
                             title=f"{title[:40]} (Audio)" if title else "TikTok Audio",
                             performer=author or "TikTok",
+                            caption=None,
                             reply_markup=create_media_keyboard(url, media_info),
                         )
+                        if audio_msg:
+                            LAST_KEYBOARD_MSG[chat_id] = audio_msg.message_id
                 except Exception as audio_err:
                     logger.warning(f"Failed to send audio track: {audio_err}")
 

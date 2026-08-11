@@ -123,7 +123,6 @@ async def process_telegram_update(update: dict):
             with open(video_path, "rb") as vf:
                 await send_telegram_request("sendVideo", data={
                     "chat_id": chat_id,
-                    "caption": caption
                 }, files={"video": vf})
 
             if status_msg_id:
@@ -149,8 +148,6 @@ async def process_telegram_update(update: dict):
             for idx, path in enumerate(downloaded_images[:10]):
                 attach_name = f"photo_{idx}"
                 media_item = {"type": "photo", "media": f"attach://{attach_name}"}
-                if idx == 0:
-                    media_item["caption"] = caption
                 media_list.append(media_item)
                 files_dict[attach_name] = (path.name, open(path, "rb"), "image/jpeg")
 
