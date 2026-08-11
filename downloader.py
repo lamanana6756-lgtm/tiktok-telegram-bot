@@ -190,3 +190,38 @@ def cleanup_files(file_paths: list[Path]):
                 path.unlink()
         except Exception as e:
             logger.warning(f"Failed to delete temp file {path}: {e}")
+
+async def compress_video_if_needed(file_path: Path, max_mb: float = 48.0) -> Path:
+    """Compress video using ffmpeg if it exceeds max_mb so Telegram accepts the file upload."""
+    import asyncio
+    import subprocess
+
+    if not file_path or not file_path.exists():
+        return file_path
+
+    size_mb = file_path.stat().st_size / (1024 * 1024)
+    if size_mb <= max_mb:
+        return file_path
+
+    logger.info(f"Video size ({size_mb:.2f} MB) exceeds limit ({max_mb} MB). Compressing with ffmpeg...")
+    compressed_path = file_path.parent / f"compressed_{file_path.name}"
+
+    def _run_ffmpeg():
+        cmd = [
+            "ffmpeg", "-y", "-i", str(file_path),
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
+            "-c:a", "aac", "-b:a", "128k",
+            str(compressed_path)
+        ]
+        return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    try:
+        res = await asyncio.to_thread(_run_ffmpeg)
+        if compressed_path.exists() and compressed_path.stat().st_size > 0:
+            comp_mb = compressed_path.stat().st_size / (1024 * 1024)
+            logger.info(f"Compression successful: {size_mb:.2f} MB -> {comp_mb:.2f} MB")
+            return compressed_path
+    except Exception as e:
+        logger.error(f"FFmpeg video compression failed: {e}")
+
+    return file_path

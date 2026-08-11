@@ -18,6 +18,7 @@ from downloader import (
     fetch_tiktok_media,
     download_file,
     cleanup_files,
+    compress_video_if_needed,
 )
 
 # Logging configuration
@@ -211,11 +212,22 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
             file_size_bytes = video_path.stat().st_size
             file_size_mb = file_size_bytes / (1024 * 1024)
 
-            # Telegram Bot API standard file upload limit is 50MB
-            if file_size_mb > 50:
+            # Auto-compress video using ffmpeg if size > 48MB so it fits Telegram limit
+            if file_size_mb > 48.0:
+                await status_msg.edit_text(
+                    f"⚡ *វីដេអូមានទំហំធំ ({file_size_mb:.1f} MB) — កំពុងសម្រួលទំហំសម្រាប់ Telegram...*",
+                    parse_mode="Markdown"
+                )
+                compressed_path = await compress_video_if_needed(video_path, max_mb=48.0)
+                if compressed_path != video_path:
+                    temp_files.append(compressed_path)
+                    video_path = compressed_path
+                    file_size_mb = video_path.stat().st_size / (1024 * 1024)
+
+            # Telegram Bot API standard file upload limit fallback
+            if file_size_mb > 50.0:
                 logger.warning(f"Video file size ({file_size_mb:.2f} MB) exceeds Telegram 50MB limit.")
                 large_file_keyboard = create_media_keyboard(url, media_info)
-                # Insert Direct Download Link button at the top
                 large_file_keyboard.inline_keyboard.insert(0, [
                     InlineKeyboardButton(f"⏬ ទាញយកវីដេអូផ្ទាល់ ({file_size_mb:.1f} MB)", url=video_url)
                 ])

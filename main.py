@@ -6,7 +6,7 @@ from firebase_functions import https_fn
 from firebase_admin import initialize_app
 import httpx
 
-from downloader import extract_tiktok_url, fetch_tiktok_media, download_file, cleanup_files
+from downloader import extract_tiktok_url, fetch_tiktok_media, download_file, cleanup_files, compress_video_if_needed
 
 # Initialize Firebase App
 initialize_app()
@@ -100,7 +100,14 @@ async def process_telegram_update(update: dict):
             file_size_bytes = video_path.stat().st_size
             file_size_mb = file_size_bytes / (1024 * 1024)
 
-            if file_size_mb > 50:
+            if file_size_mb > 48.0:
+                compressed_path = await compress_video_if_needed(video_path, max_mb=48.0)
+                if compressed_path != video_path:
+                    temp_files.append(compressed_path)
+                    video_path = compressed_path
+                    file_size_mb = video_path.stat().st_size / (1024 * 1024)
+
+            if file_size_mb > 50.0:
                 reply_markup = {
                     "inline_keyboard": [
                         [{"text": f"⏬ ទាញយកវីដេអូផ្ទាល់ ({file_size_mb:.1f} MB)", "url": video_url}]
