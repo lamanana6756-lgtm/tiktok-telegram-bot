@@ -192,7 +192,7 @@ def cleanup_files(file_paths: list[Path]):
             logger.warning(f"Failed to delete temp file {path}: {e}")
 
 async def compress_video_if_needed(file_path: Path, max_mb: float = 48.0) -> Path:
-    """Compress video using ffmpeg if it exceeds max_mb so Telegram accepts the file upload."""
+    """Compress video using ffmpeg ultrafast preset & 720p scaling if it exceeds max_mb."""
     import asyncio
     import subprocess
 
@@ -203,14 +203,15 @@ async def compress_video_if_needed(file_path: Path, max_mb: float = 48.0) -> Pat
     if size_mb <= max_mb:
         return file_path
 
-    logger.info(f"Video size ({size_mb:.2f} MB) exceeds limit ({max_mb} MB). Compressing with ffmpeg...")
+    logger.info(f"Video size ({size_mb:.2f} MB) exceeds limit ({max_mb} MB). Compressing with ffmpeg ultrafast...")
     compressed_path = file_path.parent / f"compressed_{file_path.name}"
 
     def _run_ffmpeg():
         cmd = [
             "ffmpeg", "-y", "-i", str(file_path),
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
-            "-c:a", "aac", "-b:a", "128k",
+            "-vf", "scale=-2:720",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+            "-c:a", "copy",
             str(compressed_path)
         ]
         return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
