@@ -182,13 +182,18 @@ async def fetch_from_ytdlp(url: str) -> dict:
     return {"status": "error", "error": "No downloadable media stream found."}
 
 async def fetch_youtube_media(url: str) -> dict:
-    """Fetch YouTube video or Shorts details using yt-dlp."""
+    """Fetch YouTube video or Shorts details using yt-dlp with mobile client emulation."""
     import asyncio
     ydl_opts = {
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
         "user_agent": USER_AGENT,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "mweb"]
+            }
+        }
     }
 
     def _extract():
@@ -204,18 +209,27 @@ async def fetch_youtube_media(url: str) -> dict:
         author = info.get("uploader") or info.get("channel") or ""
 
         direct_url = info.get("url")
-        if not direct_url and "formats" in info:
-            formats = info["formats"]
-            mp4_formats = [f for f in formats if f.get("ext") == "mp4" and f.get("acodec") != "none" and f.get("vcodec") != "none"]
-            if mp4_formats:
-                direct_url = mp4_formats[-1].get("url")
-            elif formats:
+        formats = info.get("formats", [])
+
+        if not direct_url and formats:
+            combined = [
+                f for f in formats 
+                if f.get("vcodec") not in (None, "none") and f.get("acodec") not in (None, "none")
+            ]
+            if combined:
+                combined.sort(key=lambda x: x.get("height") or 0)
+                direct_url = combined[-1].get("url")
+            else:
                 direct_url = formats[-1].get("url")
 
         audio_url = None
-        if "formats" in info:
-            audio_formats = [f for f in info["formats"] if f.get("vcodec") == "none" and f.get("acodec") != "none"]
+        if formats:
+            audio_formats = [
+                f for f in formats 
+                if f.get("vcodec") in (None, "none") and f.get("acodec") not in (None, "none")
+            ]
             if audio_formats:
+                audio_formats.sort(key=lambda x: x.get("abr") or 0)
                 audio_url = audio_formats[-1].get("url")
 
         if direct_url:
