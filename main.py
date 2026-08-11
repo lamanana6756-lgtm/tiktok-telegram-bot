@@ -97,6 +97,29 @@ async def process_telegram_update(update: dict):
             video_path = await download_file(video_url, suffix=".mp4")
             temp_files.append(video_path)
 
+            file_size_bytes = video_path.stat().st_size
+            file_size_mb = file_size_bytes / (1024 * 1024)
+
+            if file_size_mb > 50:
+                reply_markup = {
+                    "inline_keyboard": [
+                        [{"text": f"⏬ ទាញយកវីដេអូផ្ទាល់ ({file_size_mb:.1f} MB)", "url": video_url}]
+                    ]
+                }
+                if status_msg_id:
+                    await send_telegram_request("editMessageText", {
+                        "chat_id": chat_id,
+                        "message_id": status_msg_id,
+                        "text": (
+                            f"⚠️ **វីដេអូមានទំហំធំពេក ({file_size_mb:.1f} MB)**\n\n"
+                            f"Telegram មិនអនុញ្ញាតឱ្យ Bot ផ្ញើឯកសារធំជាង **50 MB** ដោយផ្ទាល់ទេ។\n"
+                            f"👇 សូមចុចប៊ូតុងខាងក្រោមដើម្បីទាញយកវីដេអូ directly:"
+                        ),
+                        "parse_mode": "Markdown",
+                        "reply_markup": reply_markup
+                    })
+                return
+
             with open(video_path, "rb") as vf:
                 await send_telegram_request("sendVideo", data={
                     "chat_id": chat_id,

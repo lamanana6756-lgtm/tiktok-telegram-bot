@@ -208,6 +208,27 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
             video_path = await download_file(video_url, suffix=".mp4")
             temp_files.append(video_path)
 
+            file_size_bytes = video_path.stat().st_size
+            file_size_mb = file_size_bytes / (1024 * 1024)
+
+            # Telegram Bot API standard file upload limit is 50MB
+            if file_size_mb > 50:
+                logger.warning(f"Video file size ({file_size_mb:.2f} MB) exceeds Telegram 50MB limit.")
+                large_file_keyboard = create_media_keyboard(url, media_info)
+                # Insert Direct Download Link button at the top
+                large_file_keyboard.inline_keyboard.insert(0, [
+                    InlineKeyboardButton(f"⏬ ទាញយកវីដេអូផ្ទាល់ ({file_size_mb:.1f} MB)", url=video_url)
+                ])
+                
+                await status_msg.edit_text(
+                    f"⚠️ **វីដេអូមានទំហំធំពេក ({file_size_mb:.1f} MB)**\n\n"
+                    f"Telegram មិនអនុញ្ញាតឱ្យ Bot ផ្ញើឯកសារធំជាង **50 MB** ដោយផ្ទាល់ទេ។\n"
+                    f"👇 សូមចុចប៊ូតុងខាងក្រោមដើម្បីទាញយកវីដេអូ directly:",
+                    parse_mode="Markdown",
+                    reply_markup=large_file_keyboard
+                )
+                return
+
             await status_msg.edit_text("📤 *កំពុងផ្ញើវីដេអូជូន...*", parse_mode="Markdown")
             with open(video_path, "rb") as video_file:
                 await update.message.reply_video(
