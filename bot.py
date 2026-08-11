@@ -30,10 +30,15 @@ logger = logging.getLogger(__name__)
 
 AUDIO_CACHE = {}
 
-def create_media_keyboard(url: str, media_info: dict = None):
-    """Create a sleek multi-row inline keyboard layout with MP3 button."""
+def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = None, file_size_mb: float = None):
+    """Create a sleek multi-row inline keyboard layout with MP3 button and optional direct download."""
     keyboard = []
     
+    if direct_url and file_size_mb:
+        keyboard.append([
+            InlineKeyboardButton(f"⏬ ទាញយកវីដេអូផ្ទាល់ ({file_size_mb:.1f} MB)", url=direct_url)
+        ])
+
     if media_info:
         audio_url = media_info.get("audio_url")
         if audio_url:
@@ -227,10 +232,7 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # Telegram Bot API standard file upload limit fallback
             if file_size_mb > 50.0:
                 logger.warning(f"Video file size ({file_size_mb:.2f} MB) exceeds Telegram 50MB limit.")
-                large_file_keyboard = create_media_keyboard(url, media_info)
-                large_file_keyboard.inline_keyboard.insert(0, [
-                    InlineKeyboardButton(f"⏬ ទាញយកវីដេអូផ្ទាល់ ({file_size_mb:.1f} MB)", url=video_url)
-                ])
+                large_file_keyboard = create_media_keyboard(url, media_info, direct_url=video_url, file_size_mb=file_size_mb)
                 
                 await status_msg.edit_text(
                     f"⚠️ **វីដេអូមានទំហំធំពេក ({file_size_mb:.1f} MB)**\n\n"
