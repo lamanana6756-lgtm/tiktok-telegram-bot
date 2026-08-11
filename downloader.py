@@ -211,10 +211,16 @@ async def compress_video_if_needed(file_path: Path, max_mb: float = 48.0) -> Pat
             "ffmpeg", "-y", "-i", str(file_path),
             "-vf", "scale=-2:720",
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+            "-threads", "2",
             "-c:a", "copy",
             str(compressed_path)
         ]
-        return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return subprocess.run(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=60
+        )
 
     try:
         res = await asyncio.to_thread(_run_ffmpeg)
