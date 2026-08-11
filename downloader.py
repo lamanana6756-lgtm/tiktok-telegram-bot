@@ -191,7 +191,7 @@ async def fetch_youtube_media(url: str) -> dict:
         "user_agent": USER_AGENT,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "mweb"]
+                "player_client": ["android"]
             }
         }
     }
