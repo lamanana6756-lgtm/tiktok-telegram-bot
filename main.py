@@ -100,13 +100,6 @@ async def process_telegram_update(update: dict):
             file_size_bytes = video_path.stat().st_size
             file_size_mb = file_size_bytes / (1024 * 1024)
 
-            if file_size_mb > 48.0:
-                compressed_path = await compress_video_if_needed(video_path, max_mb=48.0)
-                if compressed_path != video_path:
-                    temp_files.append(compressed_path)
-                    video_path = compressed_path
-                    file_size_mb = video_path.stat().st_size / (1024 * 1024)
-
             if file_size_mb > 50.0:
                 reply_markup = {
                     "inline_keyboard": [
@@ -118,9 +111,9 @@ async def process_telegram_update(update: dict):
                         "chat_id": chat_id,
                         "message_id": status_msg_id,
                         "text": (
-                            f"⚠️ **វីដេអូមានទំហំធំពេក ({file_size_mb:.1f} MB)**\n\n"
-                            f"Telegram មិនអនុញ្ញាតឱ្យ Bot ផ្ញើឯកសារធំជាង **50 MB** ដោយផ្ទាល់ទេ។\n"
-                            f"👇 សូមចុចប៊ូតុងខាងក្រោមដើម្បីទាញយកវីដេអូ directly:"
+                            f"⚠️ **វីដេអូមានទំហំធំ ({file_size_mb:.1f} MB)**\n\n"
+                            f"Telegram មិនអនុញ្ញាតឱ្យ Bot ផ្ញើឯកសារធំជាង **50 MB** ដោយផ្ទាល់ក្នុង Chat ទេ។\n\n"
+                            f"👇 **សូមចុចប៊ូតុងខាងក្រោមដើម្បីទាញយកវីដេអូ 4K ដើមភ្លាមៗ៖**"
                         ),
                         "parse_mode": "Markdown",
                         "reply_markup": reply_markup

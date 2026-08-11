@@ -217,27 +217,15 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
             file_size_bytes = video_path.stat().st_size
             file_size_mb = file_size_bytes / (1024 * 1024)
 
-            # Auto-compress video using ffmpeg if size > 48MB so it fits Telegram limit
-            if file_size_mb > 48.0:
-                await status_msg.edit_text(
-                    f"⚡ *វីដេអូមានទំហំធំ ({file_size_mb:.1f} MB) — កំពុងសម្រួលទំហំសម្រាប់ Telegram...*",
-                    parse_mode="Markdown"
-                )
-                compressed_path = await compress_video_if_needed(video_path, max_mb=48.0)
-                if compressed_path != video_path:
-                    temp_files.append(compressed_path)
-                    video_path = compressed_path
-                    file_size_mb = video_path.stat().st_size / (1024 * 1024)
-
-            # Telegram Bot API standard file upload limit fallback
+            # If video exceeds Telegram's 50MB bot upload limit, immediately provide direct download button
             if file_size_mb > 50.0:
-                logger.warning(f"Video file size ({file_size_mb:.2f} MB) exceeds Telegram 50MB limit.")
+                logger.info(f"Video size ({file_size_mb:.1f} MB) > 50MB limit. Providing instant direct download button.")
                 large_file_keyboard = create_media_keyboard(url, media_info, direct_url=video_url, file_size_mb=file_size_mb)
                 
                 await status_msg.edit_text(
-                    f"⚠️ **វីដេអូមានទំហំធំពេក ({file_size_mb:.1f} MB)**\n\n"
-                    f"Telegram មិនអនុញ្ញាតឱ្យ Bot ផ្ញើឯកសារធំជាង **50 MB** ដោយផ្ទាល់ទេ។\n"
-                    f"👇 សូមចុចប៊ូតុងខាងក្រោមដើម្បីទាញយកវីដេអូ directly:",
+                    f"⚠️ **វីដេអូមានទំហំធំ ({file_size_mb:.1f} MB)**\n\n"
+                    f"Telegram មិនអនុញ្ញាតឱ្យ Bot ផ្ញើឯកសារធំជាង **50 MB** ដោយផ្ទាល់ក្នុង Chat ទេ។\n\n"
+                    f"👇 **សូមចុចប៊ូតុងខាងក្រោមដើម្បីទាញយកវីដេអូ 4K ដើមភ្លាមៗ៖**",
                     parse_mode="Markdown",
                     reply_markup=large_file_keyboard
                 )
