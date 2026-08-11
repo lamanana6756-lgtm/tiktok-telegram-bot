@@ -14,34 +14,11 @@ TIKTOK_URL_REGEX = re.compile(
     re.IGNORECASE
 )
 
-# Regular expression to catch various YouTube & Shorts link formats
-YOUTUBE_URL_REGEX = re.compile(
-    r'https?://(?:www\.|m\.)?(?:youtube\.com/(?:watch\?v=|shorts/|embed/|v/)|youtu\.be/)([\w\-]{11})',
-    re.IGNORECASE
-)
-
 def extract_tiktok_url(text: str) -> str | None:
     """Extract the first TikTok URL found in text."""
     match = TIKTOK_URL_REGEX.search(text)
     if match:
         return match.group(0)
-    return None
-
-def extract_youtube_url(text: str) -> str | None:
-    """Extract the first YouTube URL found in text."""
-    match = YOUTUBE_URL_REGEX.search(text)
-    if match:
-        return match.group(0)
-    return None
-
-def extract_any_supported_url(text: str) -> tuple[str, str] | None:
-    """Extract first TikTok or YouTube URL found in text. Returns (url, platform)."""
-    yt_url = extract_youtube_url(text)
-    if yt_url:
-        return (yt_url, "youtube")
-    tt_url = extract_tiktok_url(text)
-    if tt_url:
-        return (tt_url, "tiktok")
     return None
 
 async def fetch_tiktok_media(url: str) -> dict:
@@ -180,74 +157,6 @@ async def fetch_from_ytdlp(url: str) -> dict:
         }
 
     return {"status": "error", "error": "No downloadable media stream found."}
-
-async def fetch_youtube_media(url: str) -> dict:
-    """Fetch YouTube video or Shorts details using yt-dlp with mobile client emulation."""
-    import asyncio
-    ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "user_agent": USER_AGENT,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android"]
-            }
-        }
-    }
-
-    def _extract():
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            return ydl.extract_info(url, download=False)
-
-    try:
-        info = await asyncio.to_thread(_extract)
-        if not info:
-            return {"status": "error", "error": "Could not extract YouTube media info."}
-
-        title = info.get("title", "YouTube Video")
-        author = info.get("uploader") or info.get("channel") or ""
-
-        direct_url = info.get("url")
-        formats = info.get("formats", [])
-
-        if not direct_url and formats:
-            combined = [
-                f for f in formats 
-                if f.get("vcodec") not in (None, "none") and f.get("acodec") not in (None, "none")
-            ]
-            if combined:
-                combined.sort(key=lambda x: x.get("height") or 0)
-                direct_url = combined[-1].get("url")
-            else:
-                direct_url = formats[-1].get("url")
-
-        audio_url = None
-        if formats:
-            audio_formats = [
-                f for f in formats 
-                if f.get("vcodec") in (None, "none") and f.get("acodec") not in (None, "none")
-            ]
-            if audio_formats:
-                audio_formats.sort(key=lambda x: x.get("abr") or 0)
-                audio_url = audio_formats[-1].get("url")
-
-        if direct_url:
-            return {
-                "status": "success",
-                "type": "video",
-                "platform": "youtube",
-                "title": title,
-                "author": author,
-                "video_url": direct_url,
-                "audio_url": audio_url or direct_url,
-                "is_fhd": True,
-            }
-
-        return {"status": "error", "error": "No downloadable YouTube stream found."}
-    except Exception as e:
-        logger.error(f"YouTube extraction error for {url}: {e}")
-        return {"status": "error", "error": "Unable to process YouTube link. Please verify the video is public."}
 
 async def download_file(url: str, suffix: str = ".mp4", max_retries: int = 3) -> Path:
     """Download a remote file asynchronously with automatic retries and exponential backoff."""

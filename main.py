@@ -6,16 +6,7 @@ from firebase_functions import https_fn
 from firebase_admin import initialize_app
 import httpx
 
-from downloader import (
-    extract_tiktok_url,
-    extract_youtube_url,
-    extract_any_supported_url,
-    fetch_tiktok_media,
-    fetch_youtube_media,
-    download_file,
-    cleanup_files,
-    compress_video_if_needed,
-)
+from downloader import extract_tiktok_url, fetch_tiktok_media, download_file, cleanup_files, compress_video_if_needed
 
 # Initialize Firebase App
 initialize_app()
@@ -51,16 +42,16 @@ async def process_telegram_update(update: dict):
     # Handle /start command
     if text.startswith("/start"):
         welcome_text = (
-            "👋 **សូមស្វាគមន៍មកកាន់ TikTok & YouTube Downloader Bot!**\n\n"
+            "👋 **សូមស្វាគមន៍មកកាន់ TikTok Downloader Bot!**\n\n"
             "ខ្ញុំអាចជួយអ្នកទាញយក៖\n"
-            "🎬 **TikTok & YouTube Videos** — គ្មាន Watermark\n"
-            "📱 **YouTube Shorts** — ល្បឿនលឿន 4K/HD\n"
-            "🖼️ **Photo Slide Posts**\n"
-            "🎵 **បទចម្រៀង MP3 Audio**\n\n"
+            "🎬 **វីដេអូ TikTok គ្មាន Watermark (អត់ជាប់ឡូហ្គោ)**\n"
+            "🖼️ **រូបភាព Slide / Photo Posts**\n"
+            "🎵 **បទចម្រៀង / សំឡេង Background**\n\n"
             "✨ **របៀបប្រើប្រាស់៖**\n"
-            "1. ចម្លង (Copy) លីង TikTok ឬ YouTube\n"
+            "1. ចម្លង (Copy) លីងវីដេអូ ឬរូបភាព TikTok\n"
             "2. ផ្ញើ (Paste & Send) លីងនោះមកកាន់ Bot នេះ\n"
-            "3. រង់ចាំបន្តិច Bot នឹងផ្ញើជូនអ្នកភ្លាមៗ! 🚀"
+            "3. រង់ចាំបន្តិច Bot នឹងផ្ញើជូនអ្នកភ្លាមៗ! 🚀\n\n"
+            "ផ្ញើ `/help` ដើម្បីមើលការណែនាំបន្ថែម។"
         )
         await send_telegram_request("sendMessage", {
             "chat_id": chat_id,
@@ -69,28 +60,22 @@ async def process_telegram_update(update: dict):
         })
         return
 
-    # Extract TikTok or YouTube URL
-    extracted = extract_any_supported_url(text)
-    if not extracted:
+    # Extract TikTok URL
+    url = extract_tiktok_url(text)
+    if not url:
         return
-
-    url, platform = extracted
-    platform_name = "YouTube" if platform == "youtube" else "TikTok"
 
     # Send status message
     status_res = await send_telegram_request("sendMessage", {
         "chat_id": chat_id,
-        "text": f"🔍 *កំពុងដំណើរការលីង {platform_name}...*",
+        "text": "🔍 *កំពុងដំណើរការលីង TikTok...*",
         "parse_mode": "Markdown"
     })
     status_msg_id = status_res.get("result", {}).get("message_id")
 
     temp_files = []
     try:
-        if platform == "youtube":
-            media_info = await fetch_youtube_media(url)
-        else:
-            media_info = await fetch_tiktok_media(url)
+        media_info = await fetch_tiktok_media(url)
         if media_info.get("status") != "success":
             err_msg = media_info.get("error", "Failed to fetch media.")
             if status_msg_id:

@@ -15,10 +15,7 @@ from telegram.ext import (
 from config import BOT_TOKEN
 from downloader import (
     extract_tiktok_url,
-    extract_youtube_url,
-    extract_any_supported_url,
     fetch_tiktok_media,
-    fetch_youtube_media,
     download_file,
     cleanup_files,
     compress_video_if_needed,
@@ -70,9 +67,8 @@ def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = N
                 InlineKeyboardButton("🎵 ទាញយក MP3 (Audio Only)", callback_data=f"dlmp3:{short_id}")
             ])
 
-    platform_label = "🔗 ទៅកាន់ YouTube ដើម (Original)" if ("youtube" in url or "youtu.be" in url) else "🔗 ទៅកាន់ TikTok ដើម (Original)"
     keyboard.append([
-        InlineKeyboardButton(platform_label, url=url),
+        InlineKeyboardButton("🔗 ទៅកាន់ TikTok ដើម (Original)", url=url),
         InlineKeyboardButton("📢 ចែករំលែក Bot (Share)", url=f"https://t.me/share/url?url=https://t.me/ratanaban_bot&text=%E1%9E%9F%E1%9FA%9F%E1%9E%8F%E1%9E%D2%E1%9E%9F%E1%9E%9Hand%20TikTok%20Downloader%20Bot!"),
     ])
     return InlineKeyboardMarkup(keyboard)
@@ -192,26 +188,20 @@ async def post_init(application: Application):
     ]
     await application.bot.set_my_commands(commands)
 
-async def handle_media_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Process user messages containing TikTok or YouTube links."""
+async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Process user messages containing TikTok links."""
     text = update.message.text or ""
-    extracted = extract_any_supported_url(text)
-    if not extracted:
+    url = extract_tiktok_url(text)
+    if not url:
         return
 
-    url, platform = extracted
-    platform_name = "YouTube" if platform == "youtube" else "TikTok"
-
     status_msg = await update.message.reply_text(
-        f"🔍 *កំពុងដំណើរការលីង {platform_name}...*", parse_mode="Markdown"
+        "🔍 *កំពុងដំណើរការលីង TikTok...*", parse_mode="Markdown"
     )
     temp_files: list[Path] = []
 
     try:
-        if platform == "youtube":
-            media_info = await fetch_youtube_media(url)
-        else:
-            media_info = await fetch_tiktok_media(url)
+        media_info = await fetch_tiktok_media(url)
 
         if media_info.get("status") != "success":
             error_text = media_info.get("error", "មិនអាចទាញយកបានទេ! សូមពិនិត្យមើលលីងរបស់អ្នកឡើងវិញ។")
