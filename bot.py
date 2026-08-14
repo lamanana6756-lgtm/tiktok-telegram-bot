@@ -45,15 +45,16 @@ async def clear_previous_keyboard(context: ContextTypes.DEFAULT_TYPE, chat_id: i
             logger.debug(f"Could not clear previous keyboard for chat {chat_id}: {e}")
 
 def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = None, file_size_mb: float = None):
-    """Create a sleek multi-row inline keyboard layout with MP3 button and optional direct download."""
+    """Create a sleek dual-column inline keyboard layout with MP3 button and quick actions."""
     keyboard = []
     
     if direct_url:
-        label = f"⏬ ទាញយកវីដេអូផ្ទាល់ ({file_size_mb:.1f} MB)" if file_size_mb else "⏬ ទាញយកវីដេអូផ្ទាល់ (Direct Download)"
+        label = f"⏬ ទាញយកផ្ទាល់ ({file_size_mb:.1f} MB)" if file_size_mb else "⏬ ទាញយក Direct Link"
         keyboard.append([
             InlineKeyboardButton(label, url=direct_url)
         ])
 
+    row_actions = []
     if media_info:
         audio_url = media_info.get("audio_url")
         if audio_url:
@@ -64,13 +65,14 @@ def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = N
                 "title": media_info.get("title", ""),
                 "author": media_info.get("author", ""),
             }
-            keyboard.append([
-                InlineKeyboardButton("🎵 ទាញយក MP3 (Audio Only)", callback_data=f"dlmp3:{short_id}")
-            ])
+            row_actions.append(InlineKeyboardButton("🎵 ទាញយក MP3", callback_data=f"dlmp3:{short_id}"))
+
+    row_actions.append(InlineKeyboardButton("🔗 TikTok ដើម", url=url))
+    keyboard.append(row_actions)
 
     keyboard.append([
-        InlineKeyboardButton("🔗 ទៅកាន់ TikTok ដើម (Original)", url=url),
-        InlineKeyboardButton("📢 ចែករំលែក Bot (Share)", url=f"https://t.me/share/url?url=https://t.me/ratanaban_bot&text=%E1%9E%9F%E1%9FA%9F%E1%9E%8F%E1%9E%D2%E1%9E%9F%E1%9E%9Hand%20TikTok%20Downloader%20Bot!"),
+        InlineKeyboardButton("📢 ចែករំលែក Bot", url="https://t.me/share/url?url=https://t.me/ratanaban_bot&text=Bot%20ទាញយក%20TikTok%20ល្បឿនលឿន!"),
+        InlineKeyboardButton("⚡ ព័ត៌មាន Bot", callback_data="help_info")
     ])
     return InlineKeyboardMarkup(keyboard)
 
@@ -197,7 +199,8 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     status_msg = await update.message.reply_text(
-        "🔍 *កំពុងដំណើរការលីង TikTok...*", parse_mode="Markdown"
+        "⚡ *កំពុងវិភាគលីង TikTok...*\n`[ ▓▓░░░░░░░░ ] 25% | Engine Analyzing 🔍`",
+        parse_mode="Markdown"
     )
     temp_files: list[Path] = []
 
@@ -223,7 +226,10 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 await status_msg.edit_text("❌ មិនអាចស្វែងរកវីដេអូបានទេ។")
                 return
 
-            await status_msg.edit_text("⏬ *កំពុងទាញយកវីដេអូ FHD 1080p (គ្មាន Watermark)...*", parse_mode="Markdown")
+            await status_msg.edit_text(
+                "⏬ *កំពុងទាញយកវីដេអូ FHD 1080p (គ្មាន Watermark)...*\n`[ ▓▓▓▓▓▓░░░░ ] 65% | High Speed CDN 🚀`",
+                parse_mode="Markdown"
+            )
             
             try:
                 video_path = await download_file(video_url, suffix=".mp4")
@@ -248,7 +254,10 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     LAST_KEYBOARD_MSG[chat_id] = status_msg.message_id
                     return
 
-                await status_msg.edit_text("📤 *កំពុងផ្ញើវីដេអូជូន...*", parse_mode="Markdown")
+                await status_msg.edit_text(
+                    "📤 *កំពុងផ្ញើវីដេអូជូន...*\n`[ ▓▓▓▓▓▓▓▓▓▓ ] 99% | Finalizing Delivery ✨`",
+                    parse_mode="Markdown"
+                )
                 await clear_previous_keyboard(context, chat_id)
                 with open(video_path, "rb") as video_file:
                     video_msg = await update.message.reply_video(
@@ -303,7 +312,8 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 return
 
             await status_msg.edit_text(
-                f"⏬ *កំពុងទាញយក {len(image_urls)} រូបភាព...*", parse_mode="Markdown"
+                f"⏬ *កំពុងទាញយក {len(image_urls)} រូបភាព HD...*\n`[ ▓▓▓▓▓▓░░░░ ] 65% | High Speed CDN 🚀`",
+                parse_mode="Markdown"
             )
 
             # Download all images
@@ -317,7 +327,10 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 except Exception as e:
                     logger.warning(f"Could not download image slide {img_url}: {e}")
 
-            await status_msg.edit_text("📤 *កំពុងផ្ញើរូបភាពជូន...*", parse_mode="Markdown")
+            await status_msg.edit_text(
+                "📤 *កំពុងផ្ញើរូបភាពជូន...*\n`[ ▓▓▓▓▓▓▓▓▓▓ ] 99% | Finalizing Delivery ✨`",
+                parse_mode="Markdown"
+            )
 
             # Telegram allows max 10 media items per media group call
             chunk_size = 10
