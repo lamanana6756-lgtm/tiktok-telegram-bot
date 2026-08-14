@@ -200,27 +200,32 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer("❌ ឯកសារនេះផុតកំណត់ហើយ។ សូមផ្ញើលីងម្តងទៀត។", show_alert=True)
             return
 
-        await query.answer("📄 កំពុងបង្កើតឯកសារ PDF...")
+        await query.answer("📄 កំពុងរៀបចំឯកសារ PDF...")
         status_msg = await query.message.reply_text(
-            "📄 *កំពុងបម្លែងរូបភាពទៅជាឯកសារ PDF Document...*\n`[ ▓▓▓▓▓▓░░░░ ] 65% | Compiling Study Slides 📄`",
+            "📄 *កំពុងបម្លែងរូបភាពទៅជាឯកសារ PDF Document...*\n`⚡ [ ដំណើរការបម្លែងទិន្នន័យ ] High Speed PDF Engine 🚀`",
             parse_mode="Markdown"
         )
         temp_files = []
         try:
             import uuid
+            import asyncio
             from PIL import Image
             image_urls = cache_item.get("image_urls", [])
             title = cache_item.get("title", "TikTok Study Slides")
 
-            downloaded_images: list[Path] = []
-            for img_url in image_urls:
+            # Fast parallel downloading of all image slides simultaneously
+            async def _dl_single(u):
                 try:
-                    img_p = await download_file(img_url, suffix=".jpg")
-                    if img_p.exists() and img_p.stat().st_size > 500:
-                        downloaded_images.append(img_p)
-                        temp_files.append(img_p)
-                except Exception as e:
-                    logger.warning(f"Could not download image slide for PDF: {e}")
+                    p = await download_file(u, suffix=".jpg")
+                    if p.exists() and p.stat().st_size > 500:
+                        return p
+                except Exception as ex:
+                    logger.warning(f"Failed to download image slide {u}: {ex}")
+                return None
+
+            results = await asyncio.gather(*[_dl_single(u) for u in image_urls])
+            downloaded_images = [p for p in results if p is not None]
+            temp_files.extend(downloaded_images)
 
             if not downloaded_images:
                 await status_msg.edit_text("❌ មិនមានរូបភាពសម្រាប់បង្កើត PDF ទេ។")
@@ -251,7 +256,10 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
                 format="PDF"
             )
 
-            await status_msg.edit_text("📤 *កំពុងផ្ញើឯកសារ PDF ជូន...*", parse_mode="Markdown")
+            await status_msg.edit_text(
+                "📤 *កំពុងផ្ញើឯកសារ PDF ជូន...*\n`✨ [ ជិតរួចរាល់ ] Finalizing Delivery`",
+                parse_mode="Markdown"
+            )
             filename = "TikTok_Study_Notes.pdf"
 
             with open(pdf_path, "rb") as pf:
@@ -287,7 +295,7 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     status_msg = await update.message.reply_text(
-        "⚡ *កំពុងវិភាគលីង TikTok...*\n`[ ▓▓░░░░░░░░ ] 25% | Engine Analyzing 🔍`",
+        "⚡ *កំពុងវិភាគលីង TikTok ( High Speed Engine )...*",
         parse_mode="Markdown"
     )
     temp_files: list[Path] = []
@@ -315,7 +323,7 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 return
 
             await status_msg.edit_text(
-                "⏬ *កំពុងទាញយកវីដេអូ FHD 1080p (គ្មាន Watermark)...*\n`[ ▓▓▓▓▓▓░░░░ ] 65% | High Speed CDN 🚀`",
+                "⏬ *កំពុងទាញយកវីដេអូ FHD 1080p ( High Speed CDN )...*",
                 parse_mode="Markdown"
             )
             
@@ -343,7 +351,7 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     return
 
                 await status_msg.edit_text(
-                    "📤 *កំពុងផ្ញើវីដេអូជូន...*\n`[ ▓▓▓▓▓▓▓▓▓▓ ] 99% | Finalizing Delivery ✨`",
+                    "📤 *កំពុងផ្ញើវីដេអូចូលក្នុង Telegram Chat...*",
                     parse_mode="Markdown"
                 )
                 await clear_previous_keyboard(context, chat_id)
@@ -400,23 +408,27 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 return
 
             await status_msg.edit_text(
-                f"⏬ *កំពុងទាញយក {len(image_urls)} រូបភាព HD...*\n`[ ▓▓▓▓▓▓░░░░ ] 65% | High Speed CDN 🚀`",
+                f"⏬ *កំពុងទាញយក {len(image_urls)} រូបភាព HD ( Fast Parallel CDN )...*",
                 parse_mode="Markdown"
             )
 
-            # Download all images
-            downloaded_images: list[Path] = []
-            for img_url in image_urls:
+            # Fast parallel download of all image slides
+            async def _dl_photo(u):
                 try:
-                    img_path = await download_file(img_url, suffix=".jpg")
-                    if img_path.exists() and img_path.stat().st_size > 500:
-                        downloaded_images.append(img_path)
-                        temp_files.append(img_path)
-                except Exception as e:
-                    logger.warning(f"Could not download image slide {img_url}: {e}")
+                    p = await download_file(u, suffix=".jpg")
+                    if p.exists() and p.stat().st_size > 500:
+                        return p
+                except Exception as ex:
+                    logger.warning(f"Could not download image slide {u}: {ex}")
+                return None
+
+            import asyncio
+            results = await asyncio.gather(*[_dl_photo(u) for u in image_urls])
+            downloaded_images = [p for p in results if p is not None]
+            temp_files.extend(downloaded_images)
 
             await status_msg.edit_text(
-                "📤 *កំពុងផ្ញើរូបភាពជូន...*\n`[ ▓▓▓▓▓▓▓▓▓▓ ] 99% | Finalizing Delivery ✨`",
+                "📤 *កំពុងផ្ញើរូបភាពចូលក្នុង Telegram Chat...*",
                 parse_mode="Markdown"
             )
 
