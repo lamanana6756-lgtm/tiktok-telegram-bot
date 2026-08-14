@@ -48,9 +48,10 @@ def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = N
     """Create a sleek multi-row inline keyboard layout with MP3 button and optional direct download."""
     keyboard = []
     
-    if direct_url and file_size_mb:
+    if direct_url:
+        label = f"⏬ ទាញយកវីដេអូផ្ទាល់ ({file_size_mb:.1f} MB)" if file_size_mb else "⏬ ទាញយកវីដេអូផ្ទាល់ (Direct Download)"
         keyboard.append([
-            InlineKeyboardButton(f"⏬ ទាញយកវីដេអូផ្ទាល់ ({file_size_mb:.1f} MB)", url=direct_url)
+            InlineKeyboardButton(label, url=direct_url)
         ])
 
     if media_info:

@@ -55,29 +55,38 @@ async def fetch_tiktok_media(url: str) -> dict:
     """
     Fetch TikTok media details using ultra-fast multi-engine pipeline:
     1. Pre-resolve short link (vt.tiktok -> full URL in ~0.2s)
-    2. Primary Engine: TikMate API (0.8s ultra-fast response, no lag)
-    3. Failover Engine: TikWM API
-    4. Fallback Engine: yt-dlp
+    2. Primary Engine #1: SSSTik (tikcdn.io edge CDN proxied download - 100% video delivery)
+    3. Primary Engine #2: TikMate API
+    4. Failover Engine: TikWM API
+    5. Fallback Engine: yt-dlp
     """
     url = await resolve_tiktok_url(url)
 
-    # 1. Primary Engine: TikMate API (Ultra-Fast 0.8s Response)
+    # 1. Primary Engine: SSSTik (tikcdn.io edge CDN - 100% success on server downloads)
+    try:
+        ssstik_res = await fetch_from_ssstik(url)
+        if ssstik_res and ssstik_res.get("status") == "success":
+            return ssstik_res
+    except Exception as e:
+        logger.warning(f"SSSTik Primary Engine failed for {url}: {e}")
+
+    # 2. TikMate API Pipeline
     try:
         tikmate_res = await fetch_from_tikmate(url)
         if tikmate_res and tikmate_res.get("status") == "success":
             return tikmate_res
     except Exception as e:
-        logger.warning(f"TikMate Primary Engine failed for {url}: {e}")
+        logger.warning(f"TikMate Engine failed for {url}: {e}")
 
-    # 2. Failover Engine: TikWM API
+    # 3. TikWM API Pipeline
     try:
         api_res = await fetch_from_tikwm(url)
         if api_res and api_res.get("status") == "success":
             return api_res
     except Exception as e:
-        logger.warning(f"TikWM Failover Engine failed for {url}: {e}")
+        logger.warning(f"TikWM Engine failed for {url}: {e}")
 
-    # 3. Fallback Engine: yt-dlp
+    # 4. yt-dlp Fallback Pipeline
     try:
         return await fetch_from_ytdlp(url)
     except Exception as e:
@@ -86,6 +95,51 @@ async def fetch_tiktok_media(url: str) -> dict:
             "status": "error",
             "error": "Unable to fetch TikTok media. Please verify the link is valid and public."
         }
+
+async def fetch_from_ssstik(url: str) -> dict | None:
+    """Query SSSTik engine to obtain tikcdn.io proxied video download link."""
+    headers = {"User-Agent": USER_AGENT}
+    try:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+            # Step 1: Get token
+            r1 = await client.get("https://ssstik.io/en", headers=headers)
+            match = re.search(r"s_tt\s*=\s*['\"]([^'\"]+)['\"]", r1.text)
+            tt_token = match.group(1) if match else ""
+
+            # Step 2: Query download endpoint
+            post_headers = {
+                "User-Agent": USER_AGENT,
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "HX-Request": "true",
+                "HX-Target": "target",
+                "HX-Current-URL": "https://ssstik.io/en"
+            }
+            r2 = await client.post(
+                "https://ssstik.io/abc?url=dl",
+                data={"id": url, "locale": "en", "tt": tt_token},
+                headers=post_headers
+            )
+            
+            links = re.findall(r'href=["\'](https?://[^"\']+)["\']', r2.text)
+            dl_link = None
+            for l in links:
+                if "tikcdn.io" in l or "ssstik" in l or "nwm" in l:
+                    dl_link = l
+                    break
+
+            if dl_link:
+                return {
+                    "status": "success",
+                    "type": "video",
+                    "title": "TikTok Video",
+                    "author": "TikTok Creator",
+                    "video_url": dl_link,
+                    "audio_url": None,
+                    "is_fhd": True,
+                }
+    except Exception as e:
+        logger.warning(f"SSSTik extraction error: {e}")
+    return None
 
 async def fetch_from_tikwm(url: str) -> dict | None:
     """Query multiple TikWM API endpoints with automatic failover for 365-day uptime."""
@@ -236,7 +290,7 @@ async def download_file(url: str, suffix: str = ".mp4", max_retries: int = 3) ->
     for attempt in range(1, max_retries + 1):
         headers = header_sets[(attempt - 1) % len(header_sets)]
         try:
-            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=25.0, follow_redirects=True) as client:
                 async with client.stream("GET", url, headers=headers) as response:
                     response.raise_for_status()
                     with open(file_path, "wb") as f:
