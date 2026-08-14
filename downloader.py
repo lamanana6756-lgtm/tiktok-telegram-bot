@@ -163,7 +163,10 @@ async def download_file(url: str, suffix: str = ".mp4", max_retries: int = 3) ->
     import asyncio
     filename = f"{uuid.uuid4().hex}{suffix}"
     file_path = TEMP_DIR / filename
-    headers = {"User-Agent": USER_AGENT}
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Referer": "https://www.tiktok.com/",
+    }
 
     for attempt in range(1, max_retries + 1):
         try:

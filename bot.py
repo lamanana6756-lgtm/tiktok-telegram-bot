@@ -396,7 +396,7 @@ def main():
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND & filters.Regex(r'https?://'),
-            handle_media_link,
+            handle_tiktok_link,
         )
     )
 
