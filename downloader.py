@@ -37,60 +37,68 @@ async def fetch_tiktok_media(url: str) -> dict:
         "error": str (if error)
     }
     """
+def clean_tiktok_url(url: str) -> str:
+    """Strip query parameters and clean canonical URLs."""
+    clean = url.split("?")[0]
+    clean = clean.replace("/@/", "/@tiktok/")
+    return clean
+
 async def resolve_tiktok_url(url: str) -> str:
-    """Pre-resolve short vt.tiktok.com / vm.tiktok.com links to full canonical URLs."""
+    """Pre-resolve short vt.tiktok.com / vm.tiktok.com links to canonical URLs."""
     if any(domain in url for domain in ["vt.tiktok.com", "vm.tiktok.com", "t.tiktok.com"]):
         try:
             async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
                 res = await client.head(url)
                 if res.url:
-                    resolved = str(res.url)
+                    resolved = clean_tiktok_url(str(res.url))
                     logger.info(f"Resolved short link {url} -> {resolved}")
                     return resolved
         except Exception as e:
             logger.warning(f"Could not pre-resolve short link {url}: {e}")
-    return url
+    return clean_tiktok_url(url)
 
 async def fetch_tiktok_media(url: str) -> dict:
     """
     Fetch TikTok media details using ultra-fast multi-engine pipeline:
-    1. Pre-resolve short link (vt.tiktok -> full URL in ~0.2s)
-    2. Primary Engine #1: SSSTik (tikcdn.io edge CDN - supports photos + videos)
-    3. Primary Engine #2: TikWM API (supports photos + videos)
-    4. Failover Engine: TikMate API (video-only)
-    5. Fallback Engine: yt-dlp (video-only)
+    1. Clean / Resolve TikTok URL
+    2. Primary Engine #1: SSSTik (supports photo slideshows + videos)
+    3. Primary Engine #2: TikWM API (supports photo slideshows + videos)
+    4. Failover Engine: TikMate API
+    5. Fallback Engine: yt-dlp
     """
-    url = await resolve_tiktok_url(url)
+    clean_url = await resolve_tiktok_url(url)
+    urls_to_try = [url, clean_url] if url != clean_url else [url]
 
-    # 1. Primary Engine: SSSTik (tikcdn.io edge CDN - supports photos + videos)
-    try:
-        ssstik_res = await fetch_from_ssstik(url)
-        if ssstik_res and ssstik_res.get("status") == "success":
-            return ssstik_res
-    except Exception as e:
-        logger.warning(f"SSSTik Primary Engine failed for {url}: {e}")
+    for target_url in urls_to_try:
+        # 1. Primary Engine: SSSTik (supports photo slideshows + videos)
+        try:
+            ssstik_res = await fetch_from_ssstik(target_url)
+            if ssstik_res and ssstik_res.get("status") == "success":
+                return ssstik_res
+        except Exception as e:
+            logger.warning(f"SSSTik Engine failed for {target_url}: {e}")
 
-    # 2. TikWM API Pipeline (supports photos + videos - must be before video-only engines)
-    try:
-        api_res = await fetch_from_tikwm(url)
-        if api_res and api_res.get("status") == "success":
-            return api_res
-    except Exception as e:
-        logger.warning(f"TikWM Engine failed for {url}: {e}")
+        # 2. TikWM API Pipeline (supports photos + videos)
+        try:
+            api_res = await fetch_from_tikwm(target_url)
+            if api_res and api_res.get("status") == "success":
+                return api_res
+        except Exception as e:
+            logger.warning(f"TikWM Engine failed for {target_url}: {e}")
 
-    # 3. TikMate API Pipeline (video-only fallback)
-    try:
-        tikmate_res = await fetch_from_tikmate(url)
-        if tikmate_res and tikmate_res.get("status") == "success":
-            return tikmate_res
-    except Exception as e:
-        logger.warning(f"TikMate Engine failed for {url}: {e}")
+        # 3. TikMate API Pipeline (video-only fallback)
+        try:
+            tikmate_res = await fetch_from_tikmate(target_url)
+            if tikmate_res and tikmate_res.get("status") == "success":
+                return tikmate_res
+        except Exception as e:
+            logger.warning(f"TikMate Engine failed for {target_url}: {e}")
 
-    # 4. yt-dlp Fallback Pipeline (video-only)
+    # 4. yt-dlp Fallback Pipeline
     try:
-        return await fetch_from_ytdlp(url)
+        return await fetch_from_ytdlp(clean_url)
     except Exception as e:
-        logger.error(f"yt-dlp fallback failed for {url}: {e}")
+        logger.error(f"yt-dlp fallback failed for {clean_url}: {e}")
         return {
             "status": "error",
             "error": "Unable to fetch TikTok media. Please verify the link is valid and public."
