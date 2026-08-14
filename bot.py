@@ -29,6 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 AUDIO_CACHE = {}
+PDF_CACHE = {}
 LAST_KEYBOARD_MSG = {}
 
 async def clear_previous_keyboard(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
@@ -66,6 +67,16 @@ def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = N
                 "author": media_info.get("author", ""),
             }
             row_actions.append(InlineKeyboardButton("🎵 ទាញយក MP3", callback_data=f"dlmp3:{short_id}"))
+
+        image_urls = media_info.get("image_urls", [])
+        if image_urls:
+            import uuid
+            pdf_id = uuid.uuid4().hex[:10]
+            PDF_CACHE[pdf_id] = {
+                "image_urls": image_urls,
+                "title": media_info.get("title", ""),
+            }
+            row_actions.append(InlineKeyboardButton("📄 ទាញយកជា PDF", callback_data=f"dlpdf:{pdf_id}"))
 
     row_actions.append(InlineKeyboardButton("🔗 TikTok ដើម", url=url))
     keyboard.append(row_actions)
@@ -178,6 +189,82 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         except Exception as e:
             logger.error(f"Error serving MP3 callback: {e}")
             await status_msg.edit_text("❌ មិនអាចទាញយកបទចម្រៀងបានទេ។")
+        finally:
+            cleanup_files(temp_files)
+
+    if data.startswith("dlpdf:"):
+        pdf_id = data.split(":", 1)[1]
+        cache_item = PDF_CACHE.get(pdf_id)
+        if not cache_item:
+            await query.answer("❌ ឯកសារនេះផុតកំណត់ហើយ។ សូមផ្ញើលីងម្តងទៀត។", show_alert=True)
+            return
+
+        await query.answer("📄 កំពុងបង្កើតឯកសារ PDF...")
+        status_msg = await query.message.reply_text(
+            "📄 *កំពុងបម្លែងរូបភាពទៅជាឯកសារ PDF Document...*\n`[ ▓▓▓▓▓▓░░░░ ] 65% | Compiling Study Slides 📄`",
+            parse_mode="Markdown"
+        )
+        temp_files = []
+        try:
+            import uuid
+            from PIL import Image
+            image_urls = cache_item.get("image_urls", [])
+            title = cache_item.get("title", "TikTok Study Slides")
+
+            downloaded_images: list[Path] = []
+            for img_url in image_urls:
+                try:
+                    img_p = await download_file(img_url, suffix=".jpg")
+                    if img_p.exists() and img_p.stat().st_size > 500:
+                        downloaded_images.append(img_p)
+                        temp_files.append(img_p)
+                except Exception as e:
+                    logger.warning(f"Could not download image slide for PDF: {e}")
+
+            if not downloaded_images:
+                await status_msg.edit_text("❌ មិនមានរូបភាពសម្រាប់បង្កើត PDF ទេ។")
+                return
+
+            # Compile images into PDF using PIL
+            pil_images = []
+            for p in downloaded_images:
+                try:
+                    img = Image.open(p)
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                    pil_images.append(img)
+                except Exception as img_err:
+                    logger.warning(f"Failed to load PIL image {p}: {img_err}")
+
+            if not pil_images:
+                await status_msg.edit_text("❌ បរាជ័យក្នុងការបម្លែងរូបភាព។")
+                return
+
+            pdf_path = downloaded_images[0].parent / f"notes_{uuid.uuid4().hex[:8]}.pdf"
+            temp_files.append(pdf_path)
+
+            pil_images[0].save(
+                pdf_path,
+                save_all=True,
+                append_images=pil_images[1:],
+                format="PDF"
+            )
+
+            await status_msg.edit_text("📤 *កំពុងផ្ញើឯកសារ PDF ជូន...*", parse_mode="Markdown")
+            filename = "TikTok_Study_Notes.pdf"
+
+            with open(pdf_path, "rb") as pf:
+                await query.message.reply_document(
+                    document=pf,
+                    filename=filename,
+                    caption=f"📄 **ឯកសារ PDF សិក្សា (TikTok Study Slides)**\n\n"
+                            f"📚 *បម្លែងចេញពីរូបភាព {len(pil_images)} ទំព័រ*",
+                    parse_mode="Markdown"
+                )
+            await status_msg.delete()
+        except Exception as pdf_err:
+            logger.error(f"Error serving PDF callback: {pdf_err}", exc_info=True)
+            await status_msg.edit_text("❌ បរាជ័យក្នុងការបង្កើតឯកសារ PDF។")
         finally:
             cleanup_files(temp_files)
 
