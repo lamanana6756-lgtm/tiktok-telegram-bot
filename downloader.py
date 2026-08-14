@@ -37,6 +37,31 @@ async def fetch_tiktok_media(url: str) -> dict:
         "error": str (if error)
     }
     """
+async def resolve_tiktok_url(url: str) -> str:
+    """Pre-resolve short vt.tiktok.com / vm.tiktok.com links to full canonical URLs."""
+    if any(domain in url for domain in ["vt.tiktok.com", "vm.tiktok.com", "t.tiktok.com"]):
+        try:
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+                res = await client.head(url)
+                if res.url:
+                    resolved = str(res.url)
+                    logger.info(f"Resolved short link {url} -> {resolved}")
+                    return resolved
+        except Exception as e:
+            logger.warning(f"Could not pre-resolve short link {url}: {e}")
+    return url
+
+async def fetch_tiktok_media(url: str) -> dict:
+    """
+    Fetch TikTok media details using self-healing multi-service failover pipeline:
+    1. Pre-resolve short link (vt.tiktok -> full URL)
+    2. Try TikWM endpoints (5s timeout per request)
+    3. Try TikMate API (instant high-speed failover)
+    4. Try yt-dlp fallback
+    """
+    url = await resolve_tiktok_url(url)
+
+    # 1. TikWM API Pipeline
     try:
         api_res = await fetch_from_tikwm(url)
         if api_res and api_res.get("status") == "success":
@@ -44,7 +69,15 @@ async def fetch_tiktok_media(url: str) -> dict:
     except Exception as e:
         logger.warning(f"TikWM API failed for {url}: {e}")
 
-    # Fallback to yt-dlp if TikWM API fails
+    # 2. TikMate API Failover Pipeline
+    try:
+        tikmate_res = await fetch_from_tikmate(url)
+        if tikmate_res and tikmate_res.get("status") == "success":
+            return tikmate_res
+    except Exception as e:
+        logger.warning(f"TikMate API failover failed for {url}: {e}")
+
+    # 3. yt-dlp Fallback Pipeline
     try:
         return await fetch_from_ytdlp(url)
     except Exception as e:
@@ -71,7 +104,7 @@ async def fetch_from_tikwm(url: str) -> dict | None:
         "hd": 1
     }
 
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
         for endpoint in api_endpoints:
             try:
                 response = await client.get(endpoint, params=params, headers=headers)
@@ -116,6 +149,36 @@ async def fetch_from_tikwm(url: str) -> dict | None:
                 logger.warning(f"Self-healing failover: endpoint {endpoint} failed ({err}). Trying next endpoint...")
                 continue
 
+    return None
+
+async def fetch_from_tikmate(url: str) -> dict | None:
+    """Query TikMate API as high-speed failover endpoint."""
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+            res = await client.post("https://api.tikmate.app/api/lookup", data={"url": url}, headers=headers)
+            if res.status_code == 200:
+                data = res.json()
+                tok = data.get("token")
+                vid = data.get("id")
+                if tok and vid:
+                    video_url = f"https://tikmate.app/download/{tok}/{vid}.mp4"
+                    author = data.get("author_name") or data.get("author_id") or ""
+                    title = data.get("nick") or "TikTok Post"
+                    return {
+                        "status": "success",
+                        "type": "video",
+                        "title": title,
+                        "author": author,
+                        "video_url": video_url,
+                        "audio_url": None,
+                        "is_fhd": True,
+                    }
+    except Exception as e:
+        logger.warning(f"TikMate API failover error: {e}")
     return None
 
 async def fetch_from_ytdlp(url: str) -> dict:
