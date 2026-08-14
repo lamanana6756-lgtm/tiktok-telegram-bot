@@ -37,6 +37,25 @@ async def fetch_tiktok_media(url: str) -> dict:
         "error": str (if error)
     }
     """
+import base64
+
+def decode_ssstik_url(url: str) -> str:
+    """If url is a tikcdn.io proxy URL, decode it to the direct TikTok CDN URL."""
+    if "tikcdn.io/ssstik/" in url:
+        b64_match = re.search(r'/ssstik/([a-zA-Z0-9+/=]+)', url)
+        if b64_match:
+            b64_str = b64_match.group(1)
+            try:
+                missing_padding = len(b64_str) % 4
+                if missing_padding:
+                    b64_str += '=' * (4 - missing_padding)
+                decoded = base64.b64decode(b64_str).decode('utf-8', errors='ignore')
+                if decoded.startswith("http"):
+                    return decoded
+            except Exception:
+                pass
+    return url
+
 def clean_tiktok_url(url: str) -> str:
     """Strip query parameters and clean canonical URLs."""
     clean = url.split("?")[0]
@@ -162,9 +181,9 @@ async def fetch_from_ssstik(url: str) -> dict | None:
                             b64_str += '=' * (4 - missing_padding)
                         decoded_url = base64.b64decode(b64_str).decode('utf-8', errors='ignore')
                         if any(kw in decoded_url for kw in ["photomode", "photo", ".webp", ".jpeg", ".jpg", ".png"]):
-                            photo_links.append(h)
+                            photo_links.append(decoded_url if decoded_url.startswith("http") else h)
                         elif not dl_link:
-                            dl_link = h
+                            dl_link = decoded_url if decoded_url.startswith("http") else h
                     except Exception:
                         if not dl_link:
                             dl_link = h

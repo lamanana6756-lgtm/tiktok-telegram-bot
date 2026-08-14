@@ -210,7 +210,9 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
             import uuid
             import asyncio
             from PIL import Image
-            image_urls = cache_item.get("image_urls", [])
+            from downloader import decode_ssstik_url
+            raw_urls = cache_item.get("image_urls", [])
+            image_urls = [decode_ssstik_url(u) for u in raw_urls]
             title = cache_item.get("title", "TikTok Study Slides")
 
             # Fast parallel downloading of all image slides simultaneously
