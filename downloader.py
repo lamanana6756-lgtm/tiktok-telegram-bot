@@ -55,14 +55,14 @@ async def fetch_tiktok_media(url: str) -> dict:
     """
     Fetch TikTok media details using ultra-fast multi-engine pipeline:
     1. Pre-resolve short link (vt.tiktok -> full URL in ~0.2s)
-    2. Primary Engine #1: SSSTik (tikcdn.io edge CDN proxied download - 100% video delivery)
-    3. Primary Engine #2: TikMate API
-    4. Failover Engine: TikWM API
-    5. Fallback Engine: yt-dlp
+    2. Primary Engine #1: SSSTik (tikcdn.io edge CDN - supports photos + videos)
+    3. Primary Engine #2: TikWM API (supports photos + videos)
+    4. Failover Engine: TikMate API (video-only)
+    5. Fallback Engine: yt-dlp (video-only)
     """
     url = await resolve_tiktok_url(url)
 
-    # 1. Primary Engine: SSSTik (tikcdn.io edge CDN - 100% success on server downloads)
+    # 1. Primary Engine: SSSTik (tikcdn.io edge CDN - supports photos + videos)
     try:
         ssstik_res = await fetch_from_ssstik(url)
         if ssstik_res and ssstik_res.get("status") == "success":
@@ -70,15 +70,7 @@ async def fetch_tiktok_media(url: str) -> dict:
     except Exception as e:
         logger.warning(f"SSSTik Primary Engine failed for {url}: {e}")
 
-    # 2. TikMate API Pipeline
-    try:
-        tikmate_res = await fetch_from_tikmate(url)
-        if tikmate_res and tikmate_res.get("status") == "success":
-            return tikmate_res
-    except Exception as e:
-        logger.warning(f"TikMate Engine failed for {url}: {e}")
-
-    # 3. TikWM API Pipeline
+    # 2. TikWM API Pipeline (supports photos + videos - must be before video-only engines)
     try:
         api_res = await fetch_from_tikwm(url)
         if api_res and api_res.get("status") == "success":
@@ -86,7 +78,15 @@ async def fetch_tiktok_media(url: str) -> dict:
     except Exception as e:
         logger.warning(f"TikWM Engine failed for {url}: {e}")
 
-    # 4. yt-dlp Fallback Pipeline
+    # 3. TikMate API Pipeline (video-only fallback)
+    try:
+        tikmate_res = await fetch_from_tikmate(url)
+        if tikmate_res and tikmate_res.get("status") == "success":
+            return tikmate_res
+    except Exception as e:
+        logger.warning(f"TikMate Engine failed for {url}: {e}")
+
+    # 4. yt-dlp Fallback Pipeline (video-only)
     try:
         return await fetch_from_ytdlp(url)
     except Exception as e:
