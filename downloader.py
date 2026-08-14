@@ -120,33 +120,41 @@ async def fetch_from_ssstik(url: str) -> dict | None:
                 headers=post_headers
             )
             
-            # Check for photo slideshow images first
-            photo_links = re.findall(r'href=["\'](https?://tikcdn\.io/[^"\']+)["\'][^>]*download', r2.text)
+            # Check for photo slideshow images first (ONLY match /ssstik/image/ paths)
+            photo_links = re.findall(r'href=["\']+(https?://tikcdn\.io/ssstik/image/[^"\']+)["\']', r2.text)
             if not photo_links:
-                photo_links = re.findall(r'src=["\'](https?://tikcdn\.io/ssstik/image/[^"\']+)["\']', r2.text)
+                photo_links = re.findall(r'src=["\']+(https?://tikcdn\.io/ssstik/image/[^"\']+)["\']', r2.text)
             
-            if photo_links:
+            if len(photo_links) >= 1:
                 audio_link = None
-                m_match = re.search(r'href=["\'](https?://tikcdn\.io/ssstik/m/[^"\']+)["\']', r2.text)
+                m_match = re.search(r'href=["\']+(https?://tikcdn\.io/ssstik/m/[^"\']+)["\']', r2.text)
                 if m_match:
                     audio_link = m_match.group(1)
+                # Deduplicate while preserving order
+                seen = set()
+                unique_photos = []
+                for p in photo_links:
+                    if p not in seen:
+                        seen.add(p)
+                        unique_photos.append(p)
+                logger.info(f"SSSTik found {len(unique_photos)} photo slides")
                 return {
                     "status": "success",
                     "type": "images",
                     "title": "TikTok Photo Slide",
                     "author": "TikTok Creator",
-                    "image_urls": photo_links,
+                    "image_urls": unique_photos,
                     "audio_url": audio_link,
                 }
 
-            # Check for video download links
-            links = re.findall(r'href=["\'](https?://[^"\']+)["\']', r2.text)
+            # Check for video download links (non-image tikcdn.io links)
+            links = re.findall(r'href=["\']+(https?://[^"\']+)["\']', r2.text)
             dl_link = None
             audio_link = None
             for l in links:
                 if "/ssstik/m/" in l:
                     audio_link = l
-                elif ("tikcdn.io" in l or "ssstik" in l or "nwm" in l) and not dl_link:
+                elif "/ssstik/image/" not in l and ("tikcdn.io" in l or "ssstik" in l or "nwm" in l) and not dl_link:
                     dl_link = l
 
             if dl_link:
