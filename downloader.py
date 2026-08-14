@@ -106,6 +106,7 @@ async def fetch_tiktok_media(url: str) -> dict:
 
 async def fetch_from_ssstik(url: str) -> dict | None:
     """Query SSSTik engine to obtain tikcdn.io proxied video or photo download links."""
+    import base64
     headers = {"User-Agent": USER_AGENT}
     try:
         async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
@@ -128,42 +129,58 @@ async def fetch_from_ssstik(url: str) -> dict | None:
                 headers=post_headers
             )
             
-            # Check for photo slideshow images first (ONLY match /ssstik/image/ paths)
-            photo_links = re.findall(r'href=["\']+(https?://tikcdn\.io/ssstik/image/[^"\']+)["\']', r2.text)
-            if not photo_links:
-                photo_links = re.findall(r'src=["\']+(https?://tikcdn\.io/ssstik/image/[^"\']+)["\']', r2.text)
-            
-            if len(photo_links) >= 1:
-                audio_link = None
-                m_match = re.search(r'href=["\']+(https?://tikcdn\.io/ssstik/m/[^"\']+)["\']', r2.text)
-                if m_match:
-                    audio_link = m_match.group(1)
-                # Deduplicate while preserving order
-                seen = set()
-                unique_photos = []
-                for p in photo_links:
-                    if p not in seen:
-                        seen.add(p)
-                        unique_photos.append(p)
-                logger.info(f"SSSTik found {len(unique_photos)} photo slides")
+            html_text = r2.text
+            hrefs = re.findall(r'href=["\']+(https?://tikcdn\.io/ssstik/[^"\']+)["\']', html_text)
+            if not hrefs:
+                hrefs = re.findall(r'src=["\']+(https?://tikcdn\.io/ssstik/[^"\']+)["\']', html_text)
+
+            photo_links = []
+            audio_link = None
+            dl_link = None
+            seen = set()
+
+            for h in hrefs:
+                if h in seen:
+                    continue
+                seen.add(h)
+
+                if "/ssstik/m/" in h:
+                    audio_link = h
+                    continue
+
+                if "/ssstik/image/" in h:
+                    photo_links.append(h)
+                    continue
+
+                # Inspect base64 payload to check if this is a photo slide (photomode)
+                b64_match = re.search(r'/ssstik/([a-zA-Z0-9+/=]+)', h)
+                if b64_match:
+                    b64_str = b64_match.group(1)
+                    try:
+                        missing_padding = len(b64_str) % 4
+                        if missing_padding:
+                            b64_str += '=' * (4 - missing_padding)
+                        decoded_url = base64.b64decode(b64_str).decode('utf-8', errors='ignore')
+                        if any(kw in decoded_url for kw in ["photomode", "photo", ".webp", ".jpeg", ".jpg", ".png"]):
+                            photo_links.append(h)
+                        elif not dl_link:
+                            dl_link = h
+                    except Exception:
+                        if not dl_link:
+                            dl_link = h
+                elif not dl_link:
+                    dl_link = h
+
+            if photo_links:
+                logger.info(f"SSSTik found {len(photo_links)} photo slides")
                 return {
                     "status": "success",
                     "type": "images",
                     "title": "TikTok Photo Slide",
                     "author": "TikTok Creator",
-                    "image_urls": unique_photos,
+                    "image_urls": photo_links,
                     "audio_url": audio_link,
                 }
-
-            # Check for video download links (non-image tikcdn.io links)
-            links = re.findall(r'href=["\']+(https?://[^"\']+)["\']', r2.text)
-            dl_link = None
-            audio_link = None
-            for l in links:
-                if "/ssstik/m/" in l:
-                    audio_link = l
-                elif "/ssstik/image/" not in l and ("tikcdn.io" in l or "ssstik" in l or "nwm" in l) and not dl_link:
-                    dl_link = l
 
             if dl_link:
                 return {
