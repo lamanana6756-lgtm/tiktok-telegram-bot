@@ -223,46 +223,72 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 return
 
             await status_msg.edit_text("⏬ *កំពុងទាញយកវីដេអូ FHD 1080p (គ្មាន Watermark)...*", parse_mode="Markdown")
-            video_path = await download_file(video_url, suffix=".mp4")
-            temp_files.append(video_path)
+            
+            try:
+                video_path = await download_file(video_url, suffix=".mp4")
+                temp_files.append(video_path)
 
-            file_size_bytes = video_path.stat().st_size
-            file_size_mb = file_size_bytes / (1024 * 1024)
+                file_size_bytes = video_path.stat().st_size
+                file_size_mb = file_size_bytes / (1024 * 1024)
 
-            # If video exceeds Telegram's 50MB bot upload limit, immediately provide direct download button
-            if file_size_mb > 50.0:
-                logger.info(f"Video size ({file_size_mb:.1f} MB) > 50MB limit. Providing instant direct download button.")
-                large_file_keyboard = create_media_keyboard(url, media_info, direct_url=video_url, file_size_mb=file_size_mb)
-                
+                # If video exceeds Telegram's 50MB bot upload limit, immediately provide direct download button
+                if file_size_mb > 50.0:
+                    logger.info(f"Video size ({file_size_mb:.1f} MB) > 50MB limit. Providing instant direct download button.")
+                    large_file_keyboard = create_media_keyboard(url, media_info, direct_url=video_url, file_size_mb=file_size_mb)
+                    
+                    await clear_previous_keyboard(context, chat_id)
+                    await status_msg.edit_text(
+                        f"⚠️ **វីដេអូមានទំហំធំ ({file_size_mb:.1f} MB)**\n\n"
+                        f"Telegram មិនអនុញ្ញាតឱ្យ Bot ផ្ញើឯកសារធំជាង **50 MB** ដោយផ្ទាល់ក្នុង Chat ទេ។\n\n"
+                        f"👇 **សូមចុចប៊ូតុងខាងក្រោមដើម្បីទាញយកវីដេអូ 4K ដើមភ្លាមៗ៖**",
+                        parse_mode="Markdown",
+                        reply_markup=large_file_keyboard
+                    )
+                    LAST_KEYBOARD_MSG[chat_id] = status_msg.message_id
+                    return
+
+                await status_msg.edit_text("📤 *កំពុងផ្ញើវីដេអូជូន...*", parse_mode="Markdown")
                 await clear_previous_keyboard(context, chat_id)
-                await status_msg.edit_text(
-                    f"⚠️ **វីដេអូមានទំហំធំ ({file_size_mb:.1f} MB)**\n\n"
-                    f"Telegram មិនអនុញ្ញាតឱ្យ Bot ផ្ញើឯកសារធំជាង **50 MB** ដោយផ្ទាល់ក្នុង Chat ទេ។\n\n"
-                    f"👇 **សូមចុចប៊ូតុងខាងក្រោមដើម្បីទាញយកវីដេអូ 4K ដើមភ្លាមៗ៖**",
-                    parse_mode="Markdown",
-                    reply_markup=large_file_keyboard
-                )
-                LAST_KEYBOARD_MSG[chat_id] = status_msg.message_id
-                return
+                with open(video_path, "rb") as video_file:
+                    video_msg = await update.message.reply_video(
+                        video=video_file,
+                        caption=None,
+                        supports_streaming=True,
+                        reply_markup=create_media_keyboard(url, media_info),
+                    )
+                    if video_msg:
+                        LAST_KEYBOARD_MSG[chat_id] = video_msg.message_id
 
-            await status_msg.edit_text("📤 *កំពុងផ្ញើវីដេអូជូន...*", parse_mode="Markdown")
-            await clear_previous_keyboard(context, chat_id)
-            with open(video_path, "rb") as video_file:
-                video_msg = await update.message.reply_video(
-                    video=video_file,
-                    caption=None,
-                    supports_streaming=True,
-                    reply_markup=create_media_keyboard(url, media_info),
+                await status_msg.delete()
+                await update.message.reply_text(
+                    "✅ **ទាញយកបានជោគជ័យ!**\n\n"
+                    "🔗 សូមផ្ញើ (Paste & Send) លីង TikTok ថ្មីមួយទៀតដើម្បីទាញយកបន្ត! 🚀",
+                    parse_mode="Markdown"
                 )
-                if video_msg:
-                    LAST_KEYBOARD_MSG[chat_id] = video_msg.message_id
-
-            await status_msg.delete()
-            await update.message.reply_text(
-                "✅ **ទាញយកបានជោគជ័យ!**\n\n"
-                "🔗 សូមផ្ញើ (Paste & Send) លីង TikTok ថ្មីមួយទៀតដើម្បីទាញយកបន្ត! 🚀",
-                parse_mode="Markdown"
-            )
+            except Exception as dl_err:
+                logger.warning(f"Local video download failed ({dl_err}). Attempting direct Telegram URL delivery...")
+                try:
+                    await clear_previous_keyboard(context, chat_id)
+                    video_msg = await update.message.reply_video(
+                        video=video_url,
+                        caption=None,
+                        supports_streaming=True,
+                        reply_markup=create_media_keyboard(url, media_info),
+                    )
+                    if video_msg:
+                        LAST_KEYBOARD_MSG[chat_id] = video_msg.message_id
+                    await status_msg.delete()
+                except Exception as tg_err:
+                    logger.error(f"Direct Telegram video URL delivery failed: {tg_err}")
+                    direct_kb = create_media_keyboard(url, media_info, direct_url=video_url)
+                    await clear_previous_keyboard(context, chat_id)
+                    card_msg = await status_msg.edit_text(
+                        "🎬 **វីដេអូ TikTok គ្មាន Watermark**\n\n"
+                        "👇 **សូមចុចប៊ូតុងខាងក្រោមដើម្បីទាញយក ឬមើលវីដេអូភ្លាមៗ៖**",
+                        parse_mode="Markdown",
+                        reply_markup=direct_kb
+                    )
+                    LAST_KEYBOARD_MSG[chat_id] = card_msg.message_id
 
         # -----------------------------------------------------------
         # PHOTO / SLIDESHOW POST

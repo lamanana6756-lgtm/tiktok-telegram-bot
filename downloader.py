@@ -222,16 +222,19 @@ async def fetch_from_ytdlp(url: str) -> dict:
     return {"status": "error", "error": "No downloadable media stream found."}
 
 async def download_file(url: str, suffix: str = ".mp4", max_retries: int = 3) -> Path:
-    """Download a remote file asynchronously with automatic retries and exponential backoff."""
+    """Download a remote file asynchronously with automatic retries and header rotation."""
     import asyncio
     filename = f"{uuid.uuid4().hex}{suffix}"
     file_path = TEMP_DIR / filename
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Referer": "https://www.tiktok.com/",
-    }
+    
+    header_sets = [
+        {"User-Agent": USER_AGENT, "Referer": "https://tikmate.app/"},
+        {"User-Agent": USER_AGENT, "Referer": "https://www.tiktok.com/"},
+        {"User-Agent": USER_AGENT},
+    ]
 
     for attempt in range(1, max_retries + 1):
+        headers = header_sets[(attempt - 1) % len(header_sets)]
         try:
             async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
                 async with client.stream("GET", url, headers=headers) as response:
@@ -244,7 +247,7 @@ async def download_file(url: str, suffix: str = ".mp4", max_retries: int = 3) ->
             logger.warning(f"Download attempt {attempt}/{max_retries} failed for {url}: {e}")
             if attempt == max_retries:
                 raise e
-            await asyncio.sleep(attempt * 1.5)
+            await asyncio.sleep(attempt * 1.0)
 
     return file_path
 
