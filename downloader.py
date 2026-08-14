@@ -97,7 +97,7 @@ async def fetch_tiktok_media(url: str) -> dict:
         }
 
 async def fetch_from_ssstik(url: str) -> dict | None:
-    """Query SSSTik engine to obtain tikcdn.io proxied video download link."""
+    """Query SSSTik engine to obtain tikcdn.io proxied video or photo download links."""
     headers = {"User-Agent": USER_AGENT}
     try:
         async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
@@ -120,12 +120,34 @@ async def fetch_from_ssstik(url: str) -> dict | None:
                 headers=post_headers
             )
             
+            # Check for photo slideshow images first
+            photo_links = re.findall(r'href=["\'](https?://tikcdn\.io/[^"\']+)["\'][^>]*download', r2.text)
+            if not photo_links:
+                photo_links = re.findall(r'src=["\'](https?://tikcdn\.io/ssstik/image/[^"\']+)["\']', r2.text)
+            
+            if photo_links:
+                audio_link = None
+                m_match = re.search(r'href=["\'](https?://tikcdn\.io/ssstik/m/[^"\']+)["\']', r2.text)
+                if m_match:
+                    audio_link = m_match.group(1)
+                return {
+                    "status": "success",
+                    "type": "images",
+                    "title": "TikTok Photo Slide",
+                    "author": "TikTok Creator",
+                    "image_urls": photo_links,
+                    "audio_url": audio_link,
+                }
+
+            # Check for video download links
             links = re.findall(r'href=["\'](https?://[^"\']+)["\']', r2.text)
             dl_link = None
+            audio_link = None
             for l in links:
-                if "tikcdn.io" in l or "ssstik" in l or "nwm" in l:
+                if "/ssstik/m/" in l:
+                    audio_link = l
+                elif ("tikcdn.io" in l or "ssstik" in l or "nwm" in l) and not dl_link:
                     dl_link = l
-                    break
 
             if dl_link:
                 return {
@@ -134,7 +156,7 @@ async def fetch_from_ssstik(url: str) -> dict | None:
                     "title": "TikTok Video",
                     "author": "TikTok Creator",
                     "video_url": dl_link,
-                    "audio_url": None,
+                    "audio_url": audio_link,
                     "is_fhd": True,
                 }
     except Exception as e:

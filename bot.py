@@ -309,9 +309,12 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # Download all images
             downloaded_images: list[Path] = []
             for img_url in image_urls:
-                img_path = await download_file(img_url, suffix=".jpg")
-                downloaded_images.append(img_path)
-                temp_files.append(img_path)
+                try:
+                    img_path = await download_file(img_url, suffix=".jpg")
+                    downloaded_images.append(img_path)
+                    temp_files.append(img_path)
+                except Exception as e:
+                    logger.warning(f"Could not download image slide {img_url}: {e}")
 
             await status_msg.edit_text("📤 *កំពុងផ្ញើរូបភាពជូន...*", parse_mode="Markdown")
 
