@@ -311,8 +311,9 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
             for img_url in image_urls:
                 try:
                     img_path = await download_file(img_url, suffix=".jpg")
-                    downloaded_images.append(img_path)
-                    temp_files.append(img_path)
+                    if img_path.exists() and img_path.stat().st_size > 500:
+                        downloaded_images.append(img_path)
+                        temp_files.append(img_path)
                 except Exception as e:
                     logger.warning(f"Could not download image slide {img_url}: {e}")
 
@@ -330,7 +331,16 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                             InputMediaPhoto(media=f.read(), caption=None)
                         )
 
-                await update.message.reply_media_group(media=media_group)
+                try:
+                    await update.message.reply_media_group(media=media_group)
+                except Exception as mg_err:
+                    logger.warning(f"Media group sending failed ({mg_err}). Falling back to individual photo delivery...")
+                    for img_path in chunk:
+                        try:
+                            with open(img_path, "rb") as f:
+                                await update.message.reply_photo(photo=f, caption=None)
+                        except Exception as p_err:
+                            logger.warning(f"Failed to send individual photo {img_path}: {p_err}")
 
             # Send audio if present and update status_msg with interactive action buttons
             if audio_url:
