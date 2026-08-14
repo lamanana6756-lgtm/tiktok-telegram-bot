@@ -46,16 +46,16 @@ async def clear_previous_keyboard(context: ContextTypes.DEFAULT_TYPE, chat_id: i
             logger.debug(f"Could not clear previous keyboard for chat {chat_id}: {e}")
 
 def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = None, file_size_mb: float = None):
-    """Create a sleek dual-column inline keyboard layout with MP3 button and quick actions."""
+    """Create a clean 2-column max inline keyboard layout so all button text is 100% visible."""
     keyboard = []
     
     if direct_url:
-        label = f"⏬ ទាញយកផ្ទាល់ ({file_size_mb:.1f} MB)" if file_size_mb else "⏬ ទាញយក Direct Link"
+        label = f"⏬ ទាញយក Direct ({file_size_mb:.1f} MB)" if file_size_mb else "⏬ ទាញយក Direct Link"
         keyboard.append([
             InlineKeyboardButton(label, url=direct_url)
         ])
 
-    row_actions = []
+    media_row = []
     if media_info:
         audio_url = media_info.get("audio_url")
         if audio_url:
@@ -66,7 +66,7 @@ def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = N
                 "title": media_info.get("title", ""),
                 "author": media_info.get("author", ""),
             }
-            row_actions.append(InlineKeyboardButton("🎵 ទាញយក MP3", callback_data=f"dlmp3:{short_id}"))
+            media_row.append(InlineKeyboardButton("🎵 ទាញយក MP3", callback_data=f"dlmp3:{short_id}"))
 
         image_urls = media_info.get("image_urls", [])
         if image_urls:
@@ -76,14 +76,15 @@ def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = N
                 "image_urls": image_urls,
                 "title": media_info.get("title", ""),
             }
-            row_actions.append(InlineKeyboardButton("📄 ទាញយកជា PDF", callback_data=f"dlpdf:{pdf_id}"))
+            media_row.append(InlineKeyboardButton("📄 បម្លែងជា PDF", callback_data=f"dlpdf:{pdf_id}"))
 
-    row_actions.append(InlineKeyboardButton("🔗 TikTok ដើម", url=url))
-    keyboard.append(row_actions)
+    if media_row:
+        keyboard.append(media_row)
 
+    # 2-column action row: TikTok Original link & Share Bot
     keyboard.append([
-        InlineKeyboardButton("📢 ចែករំលែក Bot", url="https://t.me/share/url?url=https://t.me/ratanaban_bot&text=Bot%20ទាញយក%20TikTok%20ល្បឿនលឿន!"),
-        InlineKeyboardButton("⚡ ព័ត៌មាន Bot", callback_data="help_info")
+        InlineKeyboardButton("🔗 TikTok ដើម", url=url),
+        InlineKeyboardButton("📢 ចែករំលែក Bot", url="https://t.me/share/url?url=https://t.me/ratanaban_bot&text=Bot%20ទាញយក%20TikTok!"),
     ])
     return InlineKeyboardMarkup(keyboard)
 
