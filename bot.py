@@ -45,7 +45,7 @@ async def clear_previous_keyboard(context: ContextTypes.DEFAULT_TYPE, chat_id: i
         except Exception as e:
             logger.debug(f"Could not clear previous keyboard for chat {chat_id}: {e}")
 
-def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = None, file_size_mb: float = None):
+def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = None, file_size_mb: float = None, pdf_bytes: bytes = None):
     """Create a clean 2-column max inline keyboard layout so all button text is 100% visible."""
     keyboard = []
     
@@ -69,10 +69,11 @@ def create_media_keyboard(url: str, media_info: dict = None, direct_url: str = N
             media_row.append(InlineKeyboardButton("🎵 ទាញយក MP3", callback_data=f"dlmp3:{short_id}"))
 
         image_urls = media_info.get("image_urls", [])
-        if image_urls:
+        if image_urls or pdf_bytes:
             import uuid
             pdf_id = uuid.uuid4().hex[:10]
             PDF_CACHE[pdf_id] = {
+                "pdf_bytes": pdf_bytes,
                 "image_urls": image_urls,
                 "title": media_info.get("title", ""),
             }
@@ -200,84 +201,77 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer("❌ ឯកសារនេះផុតកំណត់ហើយ។ សូមផ្ញើលីងម្តងទៀត។", show_alert=True)
             return
 
-        await query.answer("📄 កំពុងរៀបចំឯកសារ PDF...")
-        status_msg = await query.message.reply_text(
-            "📄 *កំពុងបម្លែងរូបភាពទៅជាឯកសារ PDF Document...*\n`⚡ [ ដំណើរការបម្លែងទិន្នន័យ ] High Speed PDF Engine 🚀`",
-            parse_mode="Markdown"
-        )
+        chat_id = update.effective_chat.id
+        await query.answer("📄 កំពុងផ្ញើឯកសារ PDF...")
+
+        pdf_bytes = cache_item.get("pdf_bytes")
         temp_files = []
-        try:
-            import uuid
-            import asyncio
-            from PIL import Image
-            from downloader import decode_ssstik_url
-            raw_urls = cache_item.get("image_urls", [])
-            image_urls = [decode_ssstik_url(u) for u in raw_urls]
-            title = cache_item.get("title", "TikTok Study Slides")
+        
+        # If PDF was not pre-compiled, compile on demand
+        if not pdf_bytes:
+            try:
+                import io
+                import asyncio
+                from PIL import Image
+                from downloader import decode_ssstik_url
+                raw_urls = cache_item.get("image_urls", [])
+                image_urls = [decode_ssstik_url(u) for u in raw_urls]
 
-            # Fast parallel downloading of all image slides simultaneously
-            async def _dl_single(u):
-                try:
-                    p = await download_file(u, suffix=".jpg")
-                    if p.exists() and p.stat().st_size > 500:
-                        return p
-                except Exception as ex:
-                    logger.warning(f"Failed to download image slide {u}: {ex}")
-                return None
+                async def _dl_single(u):
+                    try:
+                        p = await download_file(u, suffix=".jpg")
+                        if p.exists() and p.stat().st_size > 500:
+                            return p
+                    except Exception as ex:
+                        logger.warning(f"Failed to download image slide {u}: {ex}")
+                    return None
 
-            results = await asyncio.gather(*[_dl_single(u) for u in image_urls])
-            downloaded_images = [p for p in results if p is not None]
-            temp_files.extend(downloaded_images)
+                results = await asyncio.gather(*[_dl_single(u) for u in image_urls])
+                downloaded_images = [p for p in results if p is not None]
+                temp_files.extend(downloaded_images)
 
-            if not downloaded_images:
-                await status_msg.edit_text("❌ មិនមានរូបភាពសម្រាប់បង្កើត PDF ទេ។")
-                return
+                pil_images = []
+                for p in downloaded_images:
+                    try:
+                        img = Image.open(p)
+                        if img.mode != "RGB":
+                            img = img.convert("RGB")
+                        pil_images.append(img)
+                    except Exception as img_err:
+                        logger.warning(f"Failed to load PIL image {p}: {img_err}")
 
-            # Compile images into PDF using PIL
-            pil_images = []
-            for p in downloaded_images:
-                try:
-                    img = Image.open(p)
-                    if img.mode != "RGB":
-                        img = img.convert("RGB")
-                    pil_images.append(img)
-                except Exception as img_err:
-                    logger.warning(f"Failed to load PIL image {p}: {img_err}")
+                if pil_images:
+                    pdf_buf = io.BytesIO()
+                    pil_images[0].save(
+                        pdf_buf,
+                        save_all=True,
+                        append_images=pil_images[1:],
+                        format="PDF"
+                    )
+                    pdf_bytes = pdf_buf.getvalue()
+            except Exception as pdf_err:
+                logger.error(f"Error serving PDF callback: {pdf_err}", exc_info=True)
+            finally:
+                cleanup_files(temp_files)
 
-            if not pil_images:
-                await status_msg.edit_text("❌ បរាជ័យក្នុងការបម្លែងរូបភាព។")
-                return
-
-            pdf_path = downloaded_images[0].parent / f"notes_{uuid.uuid4().hex[:8]}.pdf"
-            temp_files.append(pdf_path)
-
-            pil_images[0].save(
-                pdf_path,
-                save_all=True,
-                append_images=pil_images[1:],
-                format="PDF"
-            )
-
-            await status_msg.edit_text(
-                "📤 *កំពុងផ្ញើឯកសារ PDF ជូន...*\n`✨ [ ជិតរួចរាល់ ] Finalizing Delivery`",
-                parse_mode="Markdown"
-            )
-            filename = "TikTok_Study_Notes.pdf"
-
-            with open(pdf_path, "rb") as pf:
-                await query.message.reply_document(
-                    document=pf,
-                    filename=filename,
-                    caption=f"📄 **ឯកសារ PDF សិក្សា (TikTok Study Slides)**\n\n"
-                            f"📚 *បម្លែងចេញពីរូបភាព {len(pil_images)} ទំព័រ*",
-                    parse_mode="Markdown"
-                )
-            await status_msg.delete()
-        except Exception as pdf_err:
-            logger.error(f"Error serving PDF callback: {pdf_err}", exc_info=True)
-            await status_msg.edit_text("❌ បរាជ័យក្នុងការបង្កើតឯកសារ PDF។")
-        finally:
-            cleanup_files(temp_files)
+        if pdf_bytes:
+            import io
+            try:
+                filename = "TikTok_Study_Notes.pdf"
+                with io.BytesIO(pdf_bytes) as pdf_stream:
+                    pdf_stream.name = filename
+                    await context.bot.send_document(
+                        chat_id=chat_id,
+                        document=pdf_stream,
+                        filename=filename,
+                        caption="📄 **ឯកសារ PDF សិក្សា (TikTok Study Slides)**\n\n✨ *ទាញយកជោគជ័យ 100%!*",
+                        parse_mode="Markdown"
+                    )
+            except Exception as send_err:
+                logger.error(f"Failed to send PDF document: {send_err}")
+                await context.bot.send_message(chat_id=chat_id, text="❌ មិនអាចផ្ញើឯកសារ PDF បានទេ។")
+        else:
+            await context.bot.send_message(chat_id=chat_id, text="❌ បរាជ័យក្នុងការបង្កើតឯកសារ PDF។")
 
 async def post_init(application: Application):
     """Set native Telegram bot command menu."""
@@ -429,6 +423,26 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
             downloaded_images = [p for p in results if p is not None]
             temp_files.extend(downloaded_images)
 
+            # Pre-compile PDF document while images are freshly downloaded
+            pdf_bytes = None
+            if downloaded_images:
+                try:
+                    import io
+                    from PIL import Image
+                    pil_imgs = []
+                    for p in downloaded_images:
+                        img = Image.open(p)
+                        if img.mode != "RGB":
+                            img = img.convert("RGB")
+                        pil_imgs.append(img)
+                    if pil_imgs:
+                        pdf_buf = io.BytesIO()
+                        pil_imgs[0].save(pdf_buf, save_all=True, append_images=pil_imgs[1:], format="PDF")
+                        pdf_bytes = pdf_buf.getvalue()
+                        logger.info(f"Pre-compiled PDF document ({len(pdf_bytes)} bytes)")
+                except Exception as pe:
+                    logger.warning(f"Failed to pre-compile PDF: {pe}")
+
             await status_msg.edit_text(
                 "📤 *កំពុងផ្ញើរូបភាពចូលក្នុង Telegram Chat...*",
                 parse_mode="Markdown"
@@ -470,12 +484,23 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                             title=f"{title[:40]} (Audio)" if title else "TikTok Audio",
                             performer=author or "TikTok",
                             caption=None,
-                            reply_markup=create_media_keyboard(url, media_info),
+                            reply_markup=create_media_keyboard(url, media_info, pdf_bytes=pdf_bytes),
                         )
                         if audio_msg:
                             LAST_KEYBOARD_MSG[chat_id] = audio_msg.message_id
                 except Exception as audio_err:
                     logger.warning(f"Failed to send audio track: {audio_err}")
+            else:
+                # If no audio track present, send a confirmation card with interactive keyboard
+                await clear_previous_keyboard(context, chat_id)
+                card_msg = await update.message.reply_text(
+                    "🖼️ **ទាញយកអាល់ប៊ុមរូបភាពជោគជ័យ!**\n\n"
+                    "👇 **សូមចុចប៊ូតុងខាងក្រោមដើម្បីទាញយកជា PDF Document៖**",
+                    parse_mode="Markdown",
+                    reply_markup=create_media_keyboard(url, media_info, pdf_bytes=pdf_bytes)
+                )
+                if card_msg:
+                    LAST_KEYBOARD_MSG[chat_id] = card_msg.message_id
 
             await status_msg.delete()
             await update.message.reply_text(
